@@ -1,41 +1,43 @@
 import requests
 from bs4 import BeautifulSoup
-import re
+
+HEADERS_GET = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1'
+}
+SONG_TAG_ATTRS = {"class": "title"}
+LENGTH_TAG_ATTRS = {"class": "NmQOSc"}
 
 
-def find_songs(title, artist, first_song, songs_amount):
+def find_songs(title, artist):
     query = "{art} {title}".format(art=artist, title=title).replace(" ", "+")
-    search = "http://www.google.com/search?q={query}+songs".format(query=query)
-    res = requests.get(search).text
-    soup = BeautifulSoup(res)
+    search = "https://www.google.com/search?q={query}+songs&ie=utf-8&oe=utf-8'".format(query=query)
+    res = requests.get(search, headers=HEADERS_GET).text
+    soup = BeautifulSoup(res, 'html.parser')
 
-    with open(R"C:\Users\User\git\YoutubeSongsDownloader\{}.html".format(title), 'w') as f:
+    with open(R"C:\Users\User\git\YoutubeSongsDownloader\{}.html".format(title), 'w', encoding='utf-8') as f:
         f.write(res)
 
-    navigate_string = soup.find(text=re.compile(first_song, re.IGNORECASE))
-    first_song = navigate_string.title()
-    if navigate_string is None:
-        print("could not find that first song... sure its this? {}".format(first_song))
-        raise ValueError
-    else:
-        parent = navigate_string.find_parent()
-        while not parent.has_attr("class"):
-            parent = parent.find_parent()
-        parent_class = " ".join(parent.get("class"))
-        tags = [tag.text for tag in soup.find_all(attrs={'class' : parent_class})]
-        songs = [song for song in tags[tags.index(first_song): tags.index(first_song) + songs_amount]]
+    songs = [tag.text for tag in soup.find_all(attrs=SONG_TAG_ATTRS)]
 
-    return songs
+    if soup.find(attrs=LENGTH_TAG_ATTRS) is not None:
+        lengths = [tag.text for tag in soup.find_all(attrs=LENGTH_TAG_ATTRS)]
+    else:
+        lengths = [None] * len(songs)
+
+    return dict(zip(songs, lengths))
+
 
 def main():
     params = list()
     params.append(input("Album Title:\n"))
     params.append(input("Album Artist:\n"))
-    params.append(input("first song name:\n"))
-    params.append(input("number of songs:\n"))
-    print(find_songs(title=params[0], artist=params[1], first_song=params[2], songs_amount=int(params[3])))
-
-
+    print(find_songs(title=params[0], artist=params[1]))
 
 
 if __name__ == "__main__":
