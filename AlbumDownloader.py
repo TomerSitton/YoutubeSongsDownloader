@@ -2,6 +2,10 @@ import requests
 from bs4 import BeautifulSoup
 import re
 from datetime import datetime
+import youtube_dl
+
+#TODO - use youtubedl for the video length, title, viewcount etc...?
+
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
@@ -52,8 +56,7 @@ def download_song(title, artist, length=None):
             chosen = choose_item(soup, title, artist, length)
             break
         except Exception as e:
-            raise e
-            #print("{} failed. trying again...".format(title))
+            print("{} failed. trying again...".format(title))
 
     try:
         with open(r"C:\Users\User\git\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(artist=artist, title=title), 'w', encoding='utf-8') as f:
@@ -65,6 +68,18 @@ def download_song(title, artist, length=None):
         print("cant find or parse {} on youtube".format(title))
         return
 
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': r'C:\Users\User\Downloads\youtube\{artist}-{title}.mp3'.format(title=title, artist=artist),
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192'
+            }],
+    }
+
+    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([chosen])
 
 
 
