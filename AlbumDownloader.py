@@ -56,65 +56,6 @@ def find_album_songs(album_title, artist):
     return dict(zip(songs, lengths))
 
 
-def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\User\Music"):
-    """
-    searches for "song" on youtube and download the most relevant result to output_dir.
-    returns the path to the new downloaded file. None if download failed.
-    :param song_title: the title of the song
-    :type song_title: str
-    :param artist: the artist of the song
-    :param wanted_length: The desired length of the song. example: "2:15"
-    :type wanted_length: str
-    :param output_dir: the dir to save the downloaded file in
-    :return:
-    """
-    query = 'https://www.youtube.com/results?search_query={artist}+{title}+lyrics'.format(artist=artist,
-                                                                                          title=song_title)
-    chosen = None
-    for i in range(3):
-        try:
-            res = requests.get(query).text  # not using headers intentionally - returns easier to handle data without it
-            soup = BeautifulSoup(res, 'html.parser')
-            chosen = choose_video(soup, song_title, artist, wanted_length)
-            break
-        except Exception as e:
-            print("filed finding/paresing {} . trying again...".format(song_title))
-
-    if chosen is None:
-        print("cant find or parse {} on youtube".format(song_title))
-        try:
-            with open(r"C:\Users\User\git\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(
-                    artist=artist, title=song_title), 'w', encoding='utf-8') as f:
-                f.write(res)
-        except:
-            pass
-        return
-
-    output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
-
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': output_file,
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192'
-            }]
-    }
-
-    for i in range(3):
-        try:
-            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([chosen])
-            output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
-            break
-        except Exception as e:
-            output_file = None
-            print("{} failed. trying again...".format(song_title))
-
-    return output_file
-
-
 def __score_video_name__(soup, song_title, artist, num_of_choices):
     """
     give score to the videos by their title.
@@ -279,6 +220,65 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
     print('\n\n')
 
     return items_hrefs[score.index(max(score[::-1]))]
+
+
+def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\User\Music"):
+    """
+    searches for "song" on youtube and download the most relevant result to output_dir.
+    returns the path to the new downloaded file. None if download failed.
+    :param song_title: the title of the song
+    :type song_title: str
+    :param artist: the artist of the song
+    :param wanted_length: The desired length of the song. example: "2:15"
+    :type wanted_length: str
+    :param output_dir: the dir to save the downloaded file in
+    :return:
+    """
+    query = 'https://www.youtube.com/results?search_query={artist}+{title}+lyrics'.format(artist=artist,
+                                                                                          title=song_title)
+    chosen = None
+    for i in range(3):
+        try:
+            res = requests.get(query).text  # not using headers intentionally - returns easier to handle data without it
+            soup = BeautifulSoup(res, 'html.parser')
+            chosen = choose_video(soup, song_title, artist, wanted_length)
+            break
+        except Exception as e:
+            print("filed finding/paresing {} . trying again...".format(song_title))
+
+    if chosen is None:
+        print("cant find or parse {} on youtube".format(song_title))
+        try:
+            with open(r"C:\Users\User\git\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(
+                    artist=artist, title=song_title), 'w', encoding='utf-8') as f:
+                f.write(res)
+        except:
+            pass
+        return
+
+    output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': output_file,
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192'
+            }]
+    }
+
+    for i in range(3):
+        try:
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([chosen])
+            output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
+            break
+        except Exception as e:
+            output_file = None
+            print("{} failed. trying again...".format(song_title))
+
+    return output_file
 
 
 def main():
