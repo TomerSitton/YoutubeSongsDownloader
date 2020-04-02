@@ -95,6 +95,24 @@ def download_song(song_title, artist, length=None):
 
 
 def __score_video_name__(soup, song_title, artist, num_of_choices):
+    """
+    give score to the videos by their title.
+    artist in video name grants 0.5 points, and song_title grants 1 point.
+    Forbidden words in the video's title grants -9999 points.
+    Forbidden words:
+        1. cover
+        2. live
+    :param soup: the soup of the youtube request
+    :type soup: BeautifulSoup object
+    :param song_title: the title of the song
+    :type song_title: str
+    :param artist: the artist of the song
+    :type artist: str
+    :param num_of_choices: the number of videos to choose from
+    :type num_of_choices: int
+    :return: list of scores of the videos. sorted as the videos are sorted in the youtube search result.
+    :rtype: list of ints
+    """
     forbidden_words = re.compile('.*\W(cover|live)\W.*', re.IGNORECASE)
     score = [0] * num_of_choices
     tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choices]
@@ -110,13 +128,37 @@ def __score_video_name__(soup, song_title, artist, num_of_choices):
 
 
 def __score_video_position__(num_of_choices):
+    """
+    give score to the videos by there position in the youtube search.
+    the last video gets 2 points, the next one gets 4, 6, 8....
+    :param num_of_choices: the number of videos to choose from
+    :type num_of_choices: int
+    :return: list of scores of the videos. sorted as the videos are sorted in the youtube search result.
+    :rtype: list of ints
+    """
     return [n for n in range(num_of_choices * 2, 0, -2)]
 
 
-def __score_video_length__(soup, wanted_length, num_of_choices):
+def __score_video_length__(soup, num_of_choices, wanted_length=None, accepted_seconds_error=10):
+    """
+    give score to the videos by their lengths.
+    if wanted_length given, the videos which:
+        1. its length is closest to the wanted_length
+        2. the diff between its length and wanted_length is lower or equals to accepted_seconds_error
+    will get a score of 5.
+    if wanted_length given, all other videos will get -9999 score.
+    if wanted_length not given, score will be 0 for all videos.
+    :param soup: the soup of the youtube request
+    :type soup: BeautifulSoup object
+    :param wanted_length: The desired length of the song. example: "2:15"
+    :type wanted_length: str
+    :param num_of_choices: the number of videos to choose from
+    :type num_of_choices: int
+    :return: list of scores of the videos. sorted as the videos are sorted in the youtube search result.
+    :rtype: list of ints
+    """
     tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choices]
     delta = [9999] * num_of_choices
-    accepted_seconds_error = 10
     if wanted_length is not None:
         time_format = '%M:%S'
         if wanted_length.count(':') == 2:
@@ -145,6 +187,18 @@ def __score_video_length__(soup, wanted_length, num_of_choices):
 
 
 def __score_video_views_count__(soup, num_of_choices):
+    """
+    give score to the videos by their views count.
+    the item with the max views count get 2 points.
+    the other items get 0 points.
+    item with no views field (indicating its a playlist) gets -9999 points.
+    :param soup: the soup of the youtube request
+    :type soup: BeautifulSoup object
+    :param num_of_choices: the number of videos to choose from
+    :type num_of_choices: int
+    :return: list of scores of the videos. sorted as the videos are sorted in the youtube search result.
+    :rtype: list of ints
+    """
     score = [0] * num_of_choices
     item_views_text = [tag.text.split('ago')[-1] if 'views' in tag.text else '0 views' for tag in
                        soup.find_all(attrs=YOUTUBE_VIEWS_ATTRS)][0:num_of_choices]
@@ -160,6 +214,26 @@ def __score_video_views_count__(soup, num_of_choices):
 
 
 def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3):
+    """
+    gets a soup of a youtube song search and song data, and returns the url of the most relevant video from the top
+    num_of_choices videos.
+    The decision is based on some parameters:
+        1. The position of the video in the youtube search (they have relevance algorithms to)
+        2. The name of the video
+        3. The diff between the length of the video and the wanted_length of the song
+        4. The number of views of the video
+    :param soup: the soup of the youtube request
+    :type soup: BeautifulSoup object
+    :param song_title: the title of the song
+    :type song_title: str
+    :param artist: the artist of the song
+    :type artist: str
+    :param wanted_length: The desired length of the song. example: "2:15"
+    :type wanted_length: str
+    :param num_of_choices:
+    :param num_of_choices: the number of videos to choose from. not more than 5.
+    :type num_of_choices: int
+    """
     if num_of_choices > 5:
         print("no more than 5 options")
         raise ValueError
@@ -174,10 +248,11 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
     score = [0] * num_of_choices
     score = [x + y for x, y in zip(score, __score_video_position__(num_of_choices))]
     score = [x + y for x, y in zip(score, __score_video_name__(soup, song_title, artist, num_of_choices))]
-    score = [x + y for x, y in zip(score, __score_video_length__(soup, wanted_length, num_of_choices))]
+    score = [x + y for x, y in zip(score, __score_video_length__(soup, num_of_choices, wanted_length))]
     score = [x + y for x, y in zip(score, __score_video_views_count__(soup, num_of_choices))]
 
     items_hrefs = ['https://www.youtube.com/{}'.format(tag.find_next('a', href=True).get('href')) for tag in tags]
+
     print("item hrefs: {}".format(items_hrefs))
     print("score:{}".format(score))
     print('\n\n')
