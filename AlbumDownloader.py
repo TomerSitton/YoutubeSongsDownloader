@@ -4,6 +4,9 @@ import re
 from datetime import datetime
 import youtube_dl
 import ffmpeg
+from shutil import move as movefile
+from os import remove as removefile
+
 
 #TODO - use youtubedl for the video length, title, viewcount etc...?
 
@@ -281,6 +284,26 @@ def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\
     return output_file
 
 
+def add_mp3_metadata(file, title='Unknown', album='Unknown', artist='Unknown', index=0):
+    print("{} {} {} {}".format(title, album, artist, index))
+    if title is 'Unknown':
+        title = file.split('\\')[-1].split('.')[0]
+    tmp_file = file.split('.mp3')[0] + '-tmp.mp3'
+    movefile(file, tmp_file)
+    kwargs = {
+        'metadata:g:0': "title={}".format(title),
+        'metadata:g:1': "artist={}".format(artist),
+        'metadata:g:2': "album={}".format(album),
+        'metadata:g:3': "track={}".format(index)
+    }
+    out = (
+    ffmpeg
+        .input(tmp_file)
+        .output(file, **kwargs)
+    )
+    out.run()
+    removefile(tmp_file)
+
 def main():
     album_title = input("Album Title:\n")
     artist = input("Album Artist:\n")
@@ -288,8 +311,12 @@ def main():
 
     print("songs dict: {}\n".format(songs_dict))
 
-    for song_title in songs_dict:
-        download_song(song_title, artist, wanted_length=songs_dict[song_title])
+    for i, song_title in enumerate(songs_dict):
+        song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title])
+        if song_path is None:
+            print("failed download {}. please try again later".format(song_title))
+            continue
+        add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
 
 if __name__ == "__main__":
