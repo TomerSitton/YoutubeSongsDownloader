@@ -56,31 +56,33 @@ def find_album_songs(album_title, artist):
     return dict(zip(songs, lengths))
 
 
-def download_song(title, artist, length=None):
-    query = 'https://www.youtube.com/results?search_query={artist}+{title}+lyrics'.format(artist=artist, title=title)
+def download_song(song_title, artist, length=None):
+    query = 'https://www.youtube.com/results?search_query={artist}+{title}+lyrics'.format(artist=artist,
+                                                                                          title=song_title)
     chosen = None
     for i in range(3):
         try:
             res = requests.get(query).text  # not using headers intentionally - returns easier to handle data without it
             soup = BeautifulSoup(res, 'html.parser')
-            chosen = choose_item(soup, title, artist, length)
+            chosen = choose_video(soup, song_title, artist, length)
             break
         except Exception as e:
-            print("{} failed. trying again...".format(title))
+            print("{} failed. trying again...".format(song_title))
 
-    try:
-        with open(r"C:\Users\User\git\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(artist=artist, title=title), 'w', encoding='utf-8') as f:
-            f.write(res)
-    except:
-        pass
+    if MODE == 'DEBUG':
+        try:
+            with open(r"C:\Users\User\git\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(artist=artist, title=song_title), 'w', encoding='utf-8') as f:
+                f.write(res)
+        except:
+            pass
 
     if chosen is None:
-        print("cant find or parse {} on youtube".format(title))
+        print("cant find or parse {} on youtube".format(song_title))
         return
 
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': r'C:\Users\User\Downloads\youtube\{artist}-{title}.mp3'.format(title=title, artist=artist),
+        'outtmpl': r'C:\Users\User\Downloads\youtube\{artist}-{title}.mp3'.format(title=song_title, artist=artist),
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -92,36 +94,28 @@ def download_song(title, artist, length=None):
         ydl.download([chosen])
 
 
-
-def choose_item(soup, title, artist, wanted_length=None, num_of_choises=3):
-    if num_of_choises > 5:
-        print ("no more than 5 options")
-        raise ValueError
-
-    print("wanted data: {} {} {}".format(title, artist, wanted_length))
-
-    tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choises]
-    if tags == []:
-        print("NO VIDEOS FOUND FOR SONG: {}".format(title))
-        return
-
-    score = [n for n in range(num_of_choises * 2, 0, -2)]
-
-    item_names = [tag.text.split('- Duration:')[0] for tag in tags]
+def __score_video_name__(soup, song_title, artist, num_of_choices):
     forbidden_words = re.compile('.*\W(cover|live)\W.*', re.IGNORECASE)
+    score = [0] * num_of_choices
+    tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choices]
+    item_names = [tag.text.split('- Duration:')[0] for tag in tags]
     for i, name in enumerate(item_names):
-        if title.lower() in name.lower():
+        if song_title.lower() in name.lower():
             score[i] += 1
         if artist.lower() in name.lower():
             score[i] += 0.5
         if forbidden_words.match(name):
             score[i] -= 9999
-
-    print("item names: {}".format(item_names))
-
+    return score
 
 
-    delta = [9999] * num_of_choises
+def __score_video_position__(num_of_choices):
+    return [n for n in range(num_of_choices * 2, 0, -2)]
+
+
+def __score_video_length__(soup, wanted_length, num_of_choices):
+    tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choices]
+    delta = [9999] * num_of_choices
     accepted_seconds_error = 10
     if wanted_length is not None:
         time_format = '%M:%S'
@@ -139,6 +133,7 @@ def choose_item(soup, title, artist, wanted_length=None, num_of_choises=3):
             option_time = datetime.strptime(time, time_format)
             delta[i] = (max(wanted_time, option_time) - min(wanted_time, option_time)).seconds
 
+    score = [0] * num_of_choices
     for i in range(len(score)):
         if delta[i] == 9999 and wanted_length is not None:
             score[i] -= 9999
@@ -146,13 +141,14 @@ def choose_item(soup, title, artist, wanted_length=None, num_of_choises=3):
             pass
         elif delta[i] == min(delta) or delta[i] < accepted_seconds_error:
             score[i] += 5
+    return score
 
-    print("delta = {}".format(delta))
 
-
-    item_views_text = [tag.text.split('ago')[-1] if 'views' in tag.text else '0 views' for tag in soup.find_all(attrs=YOUTUBE_VIEWS_ATTRS)][0:num_of_choises]
+def __score_video_views_count__(soup, num_of_choices):
+    score = [0] * num_of_choices
+    item_views_text = [tag.text.split('ago')[-1] if 'views' in tag.text else '0 views' for tag in
+                       soup.find_all(attrs=YOUTUBE_VIEWS_ATTRS)][0:num_of_choices]
     item_views = [int(string.split(' ')[0].replace(',', '')) for string in item_views_text]
-
 
     for i in range(len(score)):
         if item_views[i] == max(item_views):
@@ -160,11 +156,28 @@ def choose_item(soup, title, artist, wanted_length=None, num_of_choises=3):
         elif item_views[i] == 0:
             score[i] -= 9999
 
-    print("views: {}".format(item_views))
+    return score
+
+
+def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3):
+    if num_of_choices > 5:
+        print("no more than 5 options")
+        raise ValueError
+
+    print("wanted data: {} {} {}".format(song_title, artist, wanted_length))
+
+    tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choices]
+    if tags is []:
+        print("NO VIDEOS FOUND FOR SONG: {}".format(song_title))
+        return
+
+    score = [0] * num_of_choices
+    score = [x + y for x, y in zip(score, __score_video_position__(num_of_choices))]
+    score = [x + y for x, y in zip(score, __score_video_name__(soup, song_title, artist, num_of_choices))]
+    score = [x + y for x, y in zip(score, __score_video_length__(soup, wanted_length, num_of_choices))]
+    score = [x + y for x, y in zip(score, __score_video_views_count__(soup, num_of_choices))]
 
     items_hrefs = ['https://www.youtube.com/{}'.format(tag.find_next('a', href=True).get('href')) for tag in tags]
-
-
     print("item hrefs: {}".format(items_hrefs))
     print("score:{}".format(score))
     print('\n\n')
@@ -175,12 +188,12 @@ def choose_item(soup, title, artist, wanted_length=None, num_of_choises=3):
 def main():
     album_title = input("Album Title:\n")
     artist = input("Album Artist:\n")
-    songs = find_album_songs(album_title, artist)
+    songs_dict = find_album_songs(album_title, artist)
 
-    print("songs: {}\n".format(songs))
+    print("songs dict: {}\n".format(songs_dict))
 
-    for song in songs:
-        download_song(song, artist, length=songs[song])
+    for song_title in songs_dict:
+        download_song(song_title, artist, length=songs_dict[song_title])
 
 
 if __name__ == "__main__":
