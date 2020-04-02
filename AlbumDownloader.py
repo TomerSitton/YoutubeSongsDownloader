@@ -3,9 +3,11 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 import youtube_dl
+import ffmpeg
 
 #TODO - use youtubedl for the video length, title, viewcount etc...?
 
+MODE = 'DEBUG'
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
@@ -23,18 +25,26 @@ YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}
 YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}
 
 
-def find_album_songs(title, artist):
-    query = "{art} {title}".format(art=artist, title=title).replace(" ", "+")
+def find_album_songs(album_title, artist):
+    """
+    Search "<artist>+<album_title>+songs" in google.
+    return a dictionary with the songs names as keys and the songs lengths
+    as values (if no length tag in the google search, lengths will be None).
+    :param album_title: The name of the album
+    :type album_title: str
+    :param artist: The artist of the album
+    :type artist: str
+    :return: A dict of the songs names as keys and lengths as values
+    :rtype: dict of {string: string}. for example: {"song_exm": "03:25"}
+    """
+    query = "{art} {title}".format(art=artist, title=album_title).replace(" ", "+")
     search = "https://www.google.com/search?q={query}+songs&ie=utf-8&oe=utf-8'".format(query=query)
-
-    res = requests.get(search, headers=HEADERS_GET)
-    print(res)
-    res = res.text
-
+    res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
 
-    with open(R"C:\Users\User\git\YoutubeSongsDownloader\{}.html".format(title), 'w', encoding='utf-8') as f:
-        f.write(res)
+    if MODE == 'DEBUG':
+        with open(R"C:\Users\User\git\YoutubeSongsDownloader\{}.html".format(album_title), 'w', encoding='utf-8') as f:
+            f.write(res)
 
     songs = [tag.text for tag in soup.find_all(attrs=GOOGLE_SONG_TAG_ATTRS)]
 
