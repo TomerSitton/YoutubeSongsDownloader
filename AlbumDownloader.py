@@ -14,6 +14,8 @@ MODE = 'DEBUG'
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
+    #'User-Agent': 'Mozilla/5.0 (Linux; Android 7.0; SAMSUNG SM-G950F Build/NRD90M) AppleWebKit/537.36 (KHTML, like '
+    #             'Gecko) SamsungBrowser/5.2 Chrome/51.0.2704.106 Mobile Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     'Accept-Encoding': 'gzip, deflate',
@@ -304,19 +306,42 @@ def add_mp3_metadata(file, title='Unknown', album='Unknown', artist='Unknown', i
     out.run()
     removefile(tmp_file)
 
-def main():
-    album_title = input("Album Title:\n")
+
+def recieve_album_request():
+    usage_msg = """
+        Hi there!
+        This program is designed to download full albums from youtube!
+        Enter the name of the artist and the album.
+        When finished - press enter!
+        """
+    print(usage_msg)
+
+    albums = []
+
+    album_title = input("Album Title:(Enter to exit)\n")
     artist = input("Album Artist:\n")
-    songs_dict = find_album_songs(album_title, artist)
 
-    print("songs dict: {}\n".format(songs_dict))
+    while album_title is not "" and artist is not "":
+        albums.append((album_title, artist))
+        album_title = input("Album Title:(Enter to exit)\n")
+        if album_title is not "":
+            artist = input("Album Artist:(Enter to exit)\n")
 
-    for i, song_title in enumerate(songs_dict):
-        song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title])
-        if song_path is None:
-            print("failed download {}. please try again later".format(song_title))
-            continue
-        add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+    return albums
+
+def main():
+    albums = recieve_album_request()
+    for album_title, artist in albums:
+        songs_dict = find_album_songs(album_title, artist)
+
+        print("songs dict: {}\n".format(songs_dict))
+
+        for i, song_title in enumerate(songs_dict):
+            song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title])
+            if song_path is None:
+                print("failed download {}. please try again later".format(song_title))
+                continue
+            add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
 
 if __name__ == "__main__":
