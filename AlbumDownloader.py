@@ -1,20 +1,17 @@
-import requests
-from bs4 import BeautifulSoup
 import re
 from datetime import datetime
+
+import requests
 import youtube_dl
-import ffmpeg
-from shutil import move as movefile
-from os import remove as removefile
+from bs4 import BeautifulSoup
+# TODO - use youtubedl for the video length, title, viewcount etc...?
+from mutagen.id3 import ID3
 
-
-#TODO - use youtubedl for the video length, title, viewcount etc...?
-
-MODE = 'DEBUG'
+MODE = 'RUN'
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
-    #'User-Agent': 'Mozilla/5.0 (Linux; Android 7.0; SAMSUNG SM-G950F Build/NRD90M) AppleWebKit/537.36 (KHTML, like '
+    # 'User-Agent': 'Mozilla/5.0 (Linux; Android 7.0; SAMSUNG SM-G950F Build/NRD90M) AppleWebKit/537.36 (KHTML, like '
     #             'Gecko) SamsungBrowser/5.2 Chrome/51.0.2704.106 Mobile Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
@@ -24,7 +21,7 @@ HEADERS_GET = {
     'Upgrade-Insecure-Requests': '1'
 }
 GOOGLE_SONG_TAG_ATTRS = {"class": "title"}
-#GOOGLE_LENGTH_TAG_ATTRS = [{"class": "NmQOSc"}, {"class": "ooYbic"}]
+# GOOGLE_LENGTH_TAG_ATTRS = [{"class": "NmQOSc"}, {"class": "ooYbic"}]
 GOOGLE_LENGTH_TAG_ATTRS = {"class": "Li8Y0e fRmlm"}
 YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}
 YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}
@@ -131,7 +128,8 @@ def __score_video_length__(soup, num_of_choices, wanted_length=None, accepted_se
         if wanted_length.count(':') == 2:
             time_format = '%H:' + time_format
         wanted_time = datetime.strptime(wanted_length, time_format)
-        item_times = [tag.text.split('- Duration:')[1].strip().strip('.') if '- Duration:' in tag.text else None for tag in tags]
+        item_times = [tag.text.split('- Duration:')[1].strip().strip('.') if '- Duration:' in tag.text else None for tag
+                      in tags]
         for i, time in enumerate(item_times):
             if time is None:
                 delta[i] = 9999
@@ -227,7 +225,7 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
     return items_hrefs[score.index(max(score[::-1]))]
 
 
-def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\User\Music"):
+def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\talsi\Desktop\music from tomer"):
     """
     searches for "song" on youtube and download the most relevant result to output_dir.
     returns the path to the new downloaded file. None if download failed.
@@ -270,7 +268,7 @@ def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192'
-            }]
+        }]
     }
 
     for i in range(3):
@@ -280,8 +278,14 @@ def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\
             output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
             break
         except Exception as e:
-            output_file = None
-            print("{} failed. trying again...".format(song_title))
+            print("e= "+str(e))
+            if str(e) in "ERROR: ffprobe/avprobe and ffmpeg/avconv not found. Please install one.":
+                output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title,
+                                                                       artist=artist)
+                break
+            else:
+                output_file = None
+                print("{} failed. trying again...".format(song_title))
 
     return output_file
 
@@ -328,6 +332,7 @@ def recieve_album_request():
             artist = input("Album Artist:(Enter to exit)\n")
 
     return albums
+
 
 def main():
     albums = recieve_album_request()
