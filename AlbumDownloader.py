@@ -1,11 +1,15 @@
+import os
 import re
+import shutil
+import tkinter
 from datetime import datetime
-
+from tkinter.filedialog import askdirectory
 import requests
 import youtube_dl
 from bs4 import BeautifulSoup
 # TODO - use youtubedl for the video length, title, viewcount etc...?
-from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, TCON, USLT, ID3NoHeaderError
+from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, USLT, TCON
+from pydub import AudioSegment
 
 MODE = 'RUN'
 
@@ -347,8 +351,8 @@ def searchForLyrics(artist, title):
     query = "{title} {artist}".format(title=title, artist=artist).replace(" ", "-").replace("&", "and")
     search = "https://google.com/search?hl={lang}&q={query}+lyrics".format(lang='en', query=query)
     res = requests.get(search, headers=HEADERS_GET).text
-    with open(r"C:\Users\talsi\Desktop\test2.html", 'w', encoding='utf-8') as f:
-        f.write(res)
+    # with open(r"C:\Users\talsi\Desktop\test2.html", 'w', encoding='utf-8') as f:
+    #     f.write(res)
     soup = BeautifulSoup(res, 'html.parser')
     tags = [tag for tag in soup.find_all(attrs=THE_LYRICS_ATTRS)]
     i = 0
@@ -366,36 +370,38 @@ def searchForLyrics(artist, title):
 
 def add_mp3_metadata(file, title='Unknown', artist='Unknown', album='Unknown', index=0, total_songs=30, year="",
                      genres=None):
-    if file.endswith(".mp3"):
-        print("writing tags on file...")
-        print("{} {} {} {}/{}".format(title, album, artist, index, total_songs))
-        if title is 'Unknown':
-            title = file.split('\\')[-1].split('.')[0]
-        print(file)
-        title = str(title)
-        artist = str(artist)
-        album = str(album)
-        try:
-            audio = ID3(file)
-        except ID3NoHeaderError:
-            audio = ID3()
-        trackNumber = str(index) + '/' + str(total_songs)
-        lyrics = searchForLyrics(artist, title)
+    print("replacing the file...")
+    AudioSegment.from_file(file).export(file,format='mp3')
+    print("writing tags on file...")
+    print("{} {} {} {}/{}".format(title, album, artist, index, total_songs))
+    if title is 'Unknown':
+        title = file.split('\\')[-1].split('.')[0]
+    title = str(title)
+    artist = str(artist)
+    album = str(album)
+    try:
+        audio = ID3(file)
+    except ID3NoHeaderError as e:
+        print("e2= " + str(e))
+        audio = ID3()
+    trackNumber = str(index) + '/' + str(total_songs)
+    lyrics = searchForLyrics(artist, title)
 
-        audio['TIT2'] = TIT2(encoding=3, text=title)  # the title
-        audio['TPE1'] = TPE1(encoding=3, text=artist)  # the artist
-        audio['TPE2'] = TPE2(encoding=3, text=artist)  # the band
-        audio['TALB'] = TALB(encoding=3, text=album)  # the album
-        audio['TRCK'] = TRCK(encoding=3, text=trackNumber)  # the track number
-        audio['TORY'] = TORY(encoding=3, text=str(year))
-        audio['TYER'] = TYER(encoding=3, text=str(year))
-        if genres is not None:
-            audio['TCON'] = TCON(encoding=3, text=genres)
-        if lyrics is not "":
-            uslt_output = USLT(encoding=3, lang=u'eng', desc=u'desc', text=lyrics)
-            audio["USLT::'eng'"] = uslt_output
-        audio.save(file)
-        audio.pprint()
+    audio.add(TIT2(encoding=3, text=title))
+    audio['TIT2'] = TIT2(encoding=3, text=title)  # the title
+    audio['TPE1'] = TPE1(encoding=3, text=artist)  # the artist
+    audio['TPE2'] = TPE2(encoding=3, text=artist)  # the band
+    audio['TALB'] = TALB(encoding=3, text=album)  # the album
+    audio['TRCK'] = TRCK(encoding=3, text=trackNumber)  # the track number
+    audio['TORY'] = TORY(encoding=3, text=str(year))
+    audio['TYER'] = TYER(encoding=3, text=str(year))
+    if genres is not None:
+        audio['TCON'] = TCON(encoding=3, text=genres)
+    if lyrics is not "":
+        uslt_output = USLT(encoding=3, lang=u'eng', desc=u'desc', text=lyrics)
+        audio["USLT::'eng'"] = uslt_output
+
+    audio.save(file)
 
 
 def recieve_album_request():
@@ -423,6 +429,14 @@ def recieve_album_request():
 
 def main():
     albums = recieve_album_request()
+
+    root = tkinter.Tk()
+    root.withdraw()
+    root.update()
+    output_dir = askdirectory(title="choose the dir u want get tags to", initialdir=r"C:\Users\User\Desktop",
+                              mustexist=False)
+    root.destroy()
+
     for album_title, artist in albums:
         songs_dict = find_album_songs(album_title, artist)
 
@@ -431,7 +445,7 @@ def main():
         album_genres = searchForGenres(album_title, artist)
 
         for i, song_title in enumerate(songs_dict):
-            song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title])
+            song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title], output_dir=output_dir)
             if song_path is None:
                 print("failed download {}. please try again later".format(song_title))
                 continue
