@@ -1,14 +1,17 @@
-import requests
-from bs4 import BeautifulSoup
 import re
+import smtplib
 from datetime import datetime
-import youtube_dl
-import ffmpeg
-from shutil import move as movefile
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from os import remove as removefile
+from shutil import move as movefile
 
+import ffmpeg
+import requests
+import youtube_dl
+from bs4 import BeautifulSoup
 
-#TODO - use youtubedl for the video length, title, viewcount etc...?
+# TODO - use youtubedl for the video length, title, viewcount etc...?
 
 MODE = 'DEBUG'
 
@@ -286,6 +289,31 @@ def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\
     return output_file
 
 
+def sendEmail(userEmail):
+    if userEmail is not "":
+        print("sending email...")
+        email = "pythonprograms6@gmail.com"
+        password = "prog1234"
+        sendToEmail = userEmail
+        sub = "your songs are ready"
+        plot = "the songs you asked us to download are ready, go check them out"
+
+        msg = MIMEMultipart()
+        msg['From'] = "the music program"
+        msg['To'] = sendToEmail
+        msg['Subject'] = sub
+
+        msg.attach(MIMEText(plot, 'plain'))
+
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(email, password)
+        text = msg.as_string()
+        server.sendmail(email, sendToEmail, text)
+        server.quit()
+        print("the mail is in the inbox")
+
+
 def add_mp3_metadata(file, title='Unknown', album='Unknown', artist='Unknown', index=0):
     print("{} {} {} {}".format(title, album, artist, index))
     if title is 'Unknown':
@@ -329,8 +357,11 @@ def recieve_album_request():
 
     return albums
 
+
 def main():
     albums = recieve_album_request()
+    userEmail = input(
+        "if you would want us to send you an email when finished, please enter your mail (if not, press enter)\n")
     for album_title, artist in albums:
         songs_dict = find_album_songs(album_title, artist)
 
@@ -342,6 +373,8 @@ def main():
                 print("failed download {}. please try again later".format(song_title))
                 continue
             add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+
+    sendEmail(userEmail)
 
 
 if __name__ == "__main__":
