@@ -370,38 +370,42 @@ def searchForLyrics(artist, title):
 
 def add_mp3_metadata(file, title='Unknown', artist='Unknown', album='Unknown', index=0, total_songs=30, year="",
                      genres=None):
-    print("replacing the file...")
-    AudioSegment.from_file(file).export(file,format='mp3')
-    print("writing tags on file...")
-    print("{} {} {} {}/{}".format(title, album, artist, index, total_songs))
-    if title is 'Unknown':
-        title = file.split('\\')[-1].split('.')[0]
-    title = str(title)
-    artist = str(artist)
-    album = str(album)
     try:
-        audio = ID3(file)
-    except ID3NoHeaderError as e:
-        print("e2= " + str(e))
-        audio = ID3()
-    trackNumber = str(index) + '/' + str(total_songs)
-    lyrics = searchForLyrics(artist, title)
+        print("replacing the file...")
+        AudioSegment.from_file(file).export(file,format='mp3')
+        print("writing tags on file...")
+        print("{} {} {} {}/{}".format(title, album, artist, index, total_songs))
+        if title is 'Unknown':
+            title = file.split('\\')[-1].split('.')[0]
+        title = str(title)
+        artist = str(artist)
+        album = str(album)
+        try:
+            audio = ID3(file)
+        except ID3NoHeaderError as e:
+            print("e2= " + str(e))
+            audio = ID3()
+        trackNumber = str(index) + '/' + str(total_songs)
+        lyrics = searchForLyrics(artist, title)
 
-    audio.add(TIT2(encoding=3, text=title))
-    audio['TIT2'] = TIT2(encoding=3, text=title)  # the title
-    audio['TPE1'] = TPE1(encoding=3, text=artist)  # the artist
-    audio['TPE2'] = TPE2(encoding=3, text=artist)  # the band
-    audio['TALB'] = TALB(encoding=3, text=album)  # the album
-    audio['TRCK'] = TRCK(encoding=3, text=trackNumber)  # the track number
-    audio['TORY'] = TORY(encoding=3, text=str(year))
-    audio['TYER'] = TYER(encoding=3, text=str(year))
-    if genres is not None:
-        audio['TCON'] = TCON(encoding=3, text=genres)
-    if lyrics is not "":
-        uslt_output = USLT(encoding=3, lang=u'eng', desc=u'desc', text=lyrics)
-        audio["USLT::'eng'"] = uslt_output
+        audio.add(TIT2(encoding=3, text=title))
+        audio['TIT2'] = TIT2(encoding=3, text=title)  # the title
+        audio['TPE1'] = TPE1(encoding=3, text=artist)  # the artist
+        audio['TPE2'] = TPE2(encoding=3, text=artist)  # the band
+        audio['TALB'] = TALB(encoding=3, text=album)  # the album
+        audio['TRCK'] = TRCK(encoding=3, text=trackNumber)  # the track number
+        audio['TORY'] = TORY(encoding=3, text=str(year))
+        audio['TYER'] = TYER(encoding=3, text=str(year))
+        if genres is not None:
+            audio['TCON'] = TCON(encoding=3, text=genres)
+        if lyrics is not "":
+            uslt_output = USLT(encoding=3, lang=u'eng', desc=u'desc', text=lyrics)
+            audio["USLT::'eng'"] = uslt_output
 
-    audio.save(file)
+        audio.save(file)
+    except:
+        print("there was an error doing the tags with the file "+title)
+
 
 
 def recieve_album_request():
