@@ -1,22 +1,15 @@
-import os
+from os.path import expanduser
 import re
-import shutil
-import tkinter
 from datetime import datetime
 from tkinter.filedialog import askdirectory
 import requests
 import youtube_dl
 from bs4 import BeautifulSoup
-# TODO - use youtubedl for the video length, title, viewcount etc...?
-from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, USLT, TCON
+from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, USLT, TCON, Encoding
 from pydub import AudioSegment
-
-MODE = 'RUN'
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
-    # 'User-Agent': 'Mozilla/5.0 (Linux; Android 7.0; SAMSUNG SM-G950F Build/NRD90M) AppleWebKit/537.36 (KHTML, like '
-    #             'Gecko) SamsungBrowser/5.2 Chrome/51.0.2704.106 Mobile Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     'Accept-Encoding': 'gzip, deflate',
@@ -25,15 +18,9 @@ HEADERS_GET = {
     'Upgrade-Insecure-Requests': '1'
 }
 GOOGLE_SONG_TAG_ATTRS = {"class": "title"}
-# GOOGLE_LENGTH_TAG_ATTRS = [{"class": "NmQOSc"}, {"class": "ooYbic"}]
 GOOGLE_LENGTH_TAG_ATTRS = {"class": "Li8Y0e fRmlm"}
 YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}
 YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}
-GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}
-GOOGLE_GENRE_TAG_ATTRS = {"class": "title"}
-GOOGLE_GENRE2_TAG_ATTRS = {"class": "FLP8od"}
-GOOGLE_GENRE3_TAG_ATTRS = {"class": "Z0LcW"}
-THE_LYRICS_ATTRS = {"jsname": "YS01Ge"}
 
 
 def find_album_songs(album_title, artist):
@@ -52,10 +39,6 @@ def find_album_songs(album_title, artist):
     search = "https://www.google.com/search?q={query}+songs&ie=utf-8&oe=utf-8'".format(query=query)
     res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
-
-    if MODE == 'DEBUG':
-        with open(R"C:\Users\User\git\YoutubeSongsDownloader\{}.html".format(album_title), 'w', encoding='utf-8') as f:
-            f.write(res)
 
     songs = [tag.text for tag in soup.find_all(attrs=GOOGLE_SONG_TAG_ATTRS)]
 
@@ -234,7 +217,7 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
     return items_hrefs[score.index(max(score[::-1]))]
 
 
-def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\talsi\Desktop\music from tomer"):
+def download_song(song_title, artist, output_dir, wanted_length=None):
     """
     searches for "song" on youtube and download the most relevant result to output_dir.
     returns the path to the new downloaded file. None if download failed.
@@ -299,113 +282,46 @@ def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\
     return output_file
 
 
-def searchReleaseYear(album, artist):
-    query = "{album} {artist}".format(album=album, artist=artist).replace(" ", "+").replace("&", "and")
-    search = "https://google.com/search?hl={lang}&q={query}+release+date".format(lang='en', query=query)
-    res = requests.get(search, headers=HEADERS_GET).text
-    soup = BeautifulSoup(res, 'html.parser')
-    date = [tag.text for tag in soup.find_all(attrs=GOOGLE_DATE_ATTRS)]
-    if not date:
-        return ""
-    date = str(date[0])
-    date = date[date.find(',') + 1:]
-    date = date.strip()
-    print(date)
-    return date
+def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=0, year=""):
+    """
+    :param file_path:
+    :param title:
+    :param artist:
+    :param album:
+    :param index:
+    :param year:
+    :return:
+    """
 
-
-def searchForGenres(album, artist):
-    query = "{album} {artist}".format(album=album, artist=artist).replace(" ", "+").replace("&", "and")
-    search = "https://google.com/search?hl={lang}&q={query}+genre".format(lang='en', query=query)
-    print(search)
-    res = requests.get(search, headers=HEADERS_GET).text
-    text = res.split('Songs')
-    res = text[0]
-    soup = BeautifulSoup(res, 'html.parser')
-    for i in range(3):
-        if (i == 0):
-            genres = [tag.text for tag in soup.find_all(attrs=GOOGLE_GENRE_TAG_ATTRS)]
-        elif (i == 1):
-            genres = [tag.text for tag in soup.find_all(attrs=GOOGLE_GENRE2_TAG_ATTRS)]
-        elif (i == 2):
-            genres = [tag.text for tag in soup.find_all(attrs=GOOGLE_GENRE3_TAG_ATTRS)]
-        print(genres)
-        newGenre = []
-        if genres:
-            for i in genres:
-                i = str(i).split('/')
-                newGenre.append(i[0])
-                try:
-                    newGenre.append(i[1])
-                    try:
-                        newGenre.append(i[2])
-                    except IndexError:
-                        continue
-                except IndexError:
-                    continue
-            return newGenre
-    return None
-
-
-def searchForLyrics(artist, title):
-    query = "{title} {artist}".format(title=title, artist=artist).replace(" ", "-").replace("&", "and")
-    search = "https://google.com/search?hl={lang}&q={query}+lyrics".format(lang='en', query=query)
-    res = requests.get(search, headers=HEADERS_GET).text
-    # with open(r"C:\Users\talsi\Desktop\test2.html", 'w', encoding='utf-8') as f:
-    #     f.write(res)
-    soup = BeautifulSoup(res, 'html.parser')
-    tags = [tag for tag in soup.find_all(attrs=THE_LYRICS_ATTRS)]
-    i = 0
-    string = ""
-    while i < len(tags):
-        tags[i] = str(tags[i]).replace('<span jsname="YS01Ge">', "")
-        tags[i] = str(tags[i]).replace('</span>', "")
-        # print(tags[i])
-        string += tags[i]
-        string += "\n"
-        i += 1
-    # print(string)
-    return string
-
-
-def add_mp3_metadata(file, title='Unknown', artist='Unknown', album='Unknown', index=0, total_songs=30, year="",
-                     genres=None):
     try:
         print("replacing the file...")
-        AudioSegment.from_file(file).export(file,format='mp3')
+        AudioSegment.from_file(file_path).export(file_path, format='mp3')
         print("writing tags on file...")
-        print("{} {} {} {}/{}".format(title, album, artist, index, total_songs))
-        if title is 'Unknown':
-            title = file.split('\\')[-1].split('.')[0]
-        title = str(title)
-        artist = str(artist)
-        album = str(album)
-        try:
-            audio = ID3(file)
-        except ID3NoHeaderError as e:
-            print("e2= " + str(e))
-            audio = ID3()
-        trackNumber = str(index) + '/' + str(total_songs)
-        lyrics = searchForLyrics(artist, title)
+        print("{} {} {} {}".format(title, album, artist, index))
+    except FileNotFoundError as e:
+        print("failed to convert {} to mp3 because file not found: {}".format(title, e))
+        return
+    except Exception as e:
+        print("unhandled exception in converting {} to mp3: {}".format(title, e))
+        return
 
-        audio.add(TIT2(encoding=3, text=title))
-        audio['TIT2'] = TIT2(encoding=3, text=title)  # the title
-        audio['TPE1'] = TPE1(encoding=3, text=artist)  # the artist
-        audio['TPE2'] = TPE2(encoding=3, text=artist)  # the band
-        audio['TALB'] = TALB(encoding=3, text=album)  # the album
-        audio['TRCK'] = TRCK(encoding=3, text=trackNumber)  # the track number
-        audio['TORY'] = TORY(encoding=3, text=str(year))
-        audio['TYER'] = TYER(encoding=3, text=str(year))
-        if genres is not None:
-            audio['TCON'] = TCON(encoding=3, text=genres)
-        if lyrics is not "":
-            uslt_output = USLT(encoding=3, lang=u'eng', desc=u'desc', text=lyrics)
-            audio["USLT::'eng'"] = uslt_output
+    if title is 'Unknown':
+        title = file_path.split('\\')[-1].split('.')[0]
+    try:
+        audio = ID3(file_path)
+    except ID3NoHeaderError as e:
+        audio = ID3()
 
-        audio.save(file)
-    except:
-        print("there was an error doing the tags with the file "+title)
+    audio.add(TIT2(encoding=3, text=title))
+    audio['TIT2'] = TIT2(encoding=Encoding.UTF8, text=title)  # title
+    audio['TPE1'] = TPE1(encoding=Encoding.UTF8, text=artist)  # contributing artist
+    audio['TPE2'] = TPE2(encoding=Encoding.UTF8, text=artist)  # album artist
+    audio['TALB'] = TALB(encoding=Encoding.UTF8, text=album)  # album
+    audio['TRCK'] = TRCK(encoding=Encoding.UTF8, text=str(index))  # track number
+    audio['TORY'] = TORY(encoding=Encoding.UTF8, text=str(year))  # Original Release Year
+    audio['TYER'] = TYER(encoding=Encoding.UTF8, text=str(year))  # Year Of Recording
 
+    audio.save(file_path)
 
 
 def recieve_album_request():
@@ -432,29 +348,21 @@ def recieve_album_request():
 
 
 def main():
-    albums = recieve_album_request()
 
-    root = tkinter.Tk()
-    root.withdraw()
-    root.update()
-    output_dir = askdirectory(title="choose the dir u want get tags to", initialdir=r"C:\Users\User\Desktop",
-                              mustexist=False)
-    root.destroy()
+    albums = recieve_album_request()
+    output_dir = expanduser("~\\Music")
 
     for album_title, artist in albums:
         songs_dict = find_album_songs(album_title, artist)
 
         print("songs dict: {}\n".format(songs_dict))
-        album_yearOfRelease = searchReleaseYear(album_title, artist)
-        album_genres = searchForGenres(album_title, artist)
 
         for i, song_title in enumerate(songs_dict):
-            song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title], output_dir=output_dir)
+            song_path = download_song(song_title, artist, output_dir=output_dir, wanted_length=songs_dict[song_title])
             if song_path is None:
                 print("failed download {}. please try again later".format(song_title))
                 continue
-            add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1,
-                             total_songs=len(songs_dict), year=album_yearOfRelease, genres=album_genres)
+            add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
 
 if __name__ == "__main__":
