@@ -284,7 +284,7 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
 
 def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=0, year=""):
     """
-    adds tags for the music (artist, album etc.)
+    adds tags for the mp3 file (artist, album etc.)
     :param file_path: the path of the mp3 file that was downloaded
     :type file_path: str
     :param title: the title of the song
@@ -297,7 +297,7 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
     :type index: str
     :param year: the year of release of the song/ album
     :type year: str
-    :return: nothing
+    :return: None
     """
 
     try:
