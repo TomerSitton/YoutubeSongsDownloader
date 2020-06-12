@@ -1,21 +1,15 @@
-import requests
-from bs4 import BeautifulSoup
+from os.path import expanduser
 import re
 from datetime import datetime
+from tkinter.filedialog import askdirectory
+import requests
 import youtube_dl
-import ffmpeg
-from shutil import move as movefile
-from os import remove as removefile
-
-
-#TODO - use youtubedl for the video length, title, viewcount etc...?
-
-MODE = 'DEBUG'
+from bs4 import BeautifulSoup
+from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, USLT, TCON, Encoding
+from pydub import AudioSegment
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
-    #'User-Agent': 'Mozilla/5.0 (Linux; Android 7.0; SAMSUNG SM-G950F Build/NRD90M) AppleWebKit/537.36 (KHTML, like '
-    #             'Gecko) SamsungBrowser/5.2 Chrome/51.0.2704.106 Mobile Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     'Accept-Encoding': 'gzip, deflate',
@@ -24,7 +18,6 @@ HEADERS_GET = {
     'Upgrade-Insecure-Requests': '1'
 }
 GOOGLE_SONG_TAG_ATTRS = {"class": "title"}
-#GOOGLE_LENGTH_TAG_ATTRS = [{"class": "NmQOSc"}, {"class": "ooYbic"}]
 GOOGLE_LENGTH_TAG_ATTRS = {"class": "Li8Y0e fRmlm"}
 YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}
 YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}
@@ -46,10 +39,6 @@ def find_album_songs(album_title, artist):
     search = "https://www.google.com/search?q={query}+songs&ie=utf-8&oe=utf-8'".format(query=query)
     res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
-
-    if MODE == 'DEBUG':
-        with open(R"C:\Users\User\git\YoutubeSongsDownloader\{}.html".format(album_title), 'w', encoding='utf-8') as f:
-            f.write(res)
 
     songs = [tag.text for tag in soup.find_all(attrs=GOOGLE_SONG_TAG_ATTRS)]
 
@@ -131,7 +120,8 @@ def __score_video_length__(soup, num_of_choices, wanted_length=None, accepted_se
         if wanted_length.count(':') == 2:
             time_format = '%H:' + time_format
         wanted_time = datetime.strptime(wanted_length, time_format)
-        item_times = [tag.text.split('- Duration:')[1].strip().strip('.') if '- Duration:' in tag.text else None for tag in tags]
+        item_times = [tag.text.split('- Duration:')[1].strip().strip('.') if '- Duration:' in tag.text else None for tag
+                      in tags]
         for i, time in enumerate(item_times):
             if time is None:
                 delta[i] = 9999
@@ -227,7 +217,7 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
     return items_hrefs[score.index(max(score[::-1]))]
 
 
-def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\User\Music"):
+def download_song(song_title, artist, output_dir, wanted_length=None):
     """
     searches for "song" on youtube and download the most relevant result to output_dir.
     returns the path to the new downloaded file. None if download failed.
@@ -270,7 +260,7 @@ def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192'
-            }]
+        }]
     }
 
     for i in range(3):
@@ -280,31 +270,65 @@ def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\
             output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
             break
         except Exception as e:
-            output_file = None
-            print("{} failed. trying again...".format(song_title))
+            print("e= " + str(e))
+            if str(e) in "ERROR: ffprobe/avprobe and ffmpeg/avconv not found. Please install one.":
+                output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title,
+                                                                       artist=artist)
+                break
+            else:
+                output_file = None
+                print("{} failed. trying again...".format(song_title))
 
     return output_file
 
 
-def add_mp3_metadata(file, title='Unknown', album='Unknown', artist='Unknown', index=0):
-    print("{} {} {} {}".format(title, album, artist, index))
+def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=0, year=""):
+    """
+    adds tags for the mp3 file (artist, album etc.)
+    :param file_path: the path of the mp3 file that was downloaded
+    :type file_path: str
+    :param title: the title of the song
+    :type title: str
+    :param artist: the artist of the song
+    :type artist: str
+    :param album: the album that the song is part of
+    :type album: str
+    :param index: the index of the song in the album
+    :type index: str
+    :param year: the year of release of the song/ album
+    :type year: str
+    :return: None
+    """
+
+    try:
+        print("replacing the file...")
+        AudioSegment.from_file(file_path).export(file_path, format='mp3')
+        print("writing tags on file...")
+        print("{} {} {} {}".format(title, album, artist, index))
+    except FileNotFoundError as e:
+        print("failed to convert {} to mp3 because file not found: {}".format(title, e))
+        return
+    except Exception as e:
+        print("unhandled exception in converting {} to mp3: {}".format(title, e))
+        return
+
     if title is 'Unknown':
-        title = file.split('\\')[-1].split('.')[0]
-    tmp_file = file.split('.mp3')[0] + '-tmp.mp3'
-    movefile(file, tmp_file)
-    kwargs = {
-        'metadata:g:0': "title={}".format(title),
-        'metadata:g:1': "artist={}".format(artist),
-        'metadata:g:2': "album={}".format(album),
-        'metadata:g:3': "track={}".format(index)
-    }
-    out = (
-    ffmpeg
-        .input(tmp_file)
-        .output(file, **kwargs)
-    )
-    out.run()
-    removefile(tmp_file)
+        title = file_path.split('\\')[-1].split('.')[0]
+    try:
+        audio = ID3(file_path)
+    except ID3NoHeaderError as e:
+        audio = ID3()
+
+    audio.add(TIT2(encoding=3, text=title))
+    audio['TIT2'] = TIT2(encoding=Encoding.UTF8, text=title)  # title
+    audio['TPE1'] = TPE1(encoding=Encoding.UTF8, text=artist)  # contributing artist
+    audio['TPE2'] = TPE2(encoding=Encoding.UTF8, text=artist)  # album artist
+    audio['TALB'] = TALB(encoding=Encoding.UTF8, text=album)  # album
+    audio['TRCK'] = TRCK(encoding=Encoding.UTF8, text=str(index))  # track number
+    audio['TORY'] = TORY(encoding=Encoding.UTF8, text=str(year))  # Original Release Year
+    audio['TYER'] = TYER(encoding=Encoding.UTF8, text=str(year))  # Year Of Recording
+
+    audio.save(file_path)
 
 
 def recieve_album_request():
@@ -329,19 +353,23 @@ def recieve_album_request():
 
     return albums
 
+
 def main():
+
     albums = recieve_album_request()
+    output_dir = expanduser("~\\Music")
+
     for album_title, artist in albums:
         songs_dict = find_album_songs(album_title, artist)
 
         print("songs dict: {}\n".format(songs_dict))
 
         for i, song_title in enumerate(songs_dict):
-            song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title])
+            song_path = download_song(song_title, artist, output_dir=output_dir, wanted_length=songs_dict[song_title])
             if song_path is None:
                 print("failed download {}. please try again later".format(song_title))
                 continue
-            add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+            add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
 
 if __name__ == "__main__":
