@@ -17,10 +17,65 @@ HEADERS_GET = {
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1'
 }
-GOOGLE_SONG_TAG_ATTRS = {"class": "title"}
-GOOGLE_LENGTH_TAG_ATTRS = {"class": "Li8Y0e fRmlm"}
-YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}
-YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}
+GOOGLE_SONG_TAG_ATTRS = {"class": "title"}  # google album search
+GOOGLE_LENGTH_TAG_ATTRS = {"class": "Li8Y0e fRmlm"}  # google album search
+YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}  # youtube song search
+YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
+GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
+GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
+
+def find_album_songs_wiki(album_title, artist, google_songs=[]):
+    """
+    Search "<artist>+<album_title>+songs" in wikipedia.
+    return a dictionary with the songs names as keys and the songs lengths
+    as values (if no length tag in the google search, lengths will be None).
+    :param album_title: The name of the album
+    :type album_title: str
+    :param artist: The artist of the album
+    :type artist: str
+    :return: A dict of the songs names as keys and lengths as values
+    :rtype: dict of {string: string}. for example: {"song_exm": "03:25"}
+    """
+    query = "{art} {title}".format(art=artist, title=album_title).replace(" ", "+")
+    search = "https://www.google.com/search?q={query}+site:en.wikipedia.org&ie=utf-8&oe=utf-8".format(query=query)
+    res = requests.get(search, headers=HEADERS_GET).text
+    soup = BeautifulSoup(res, 'html.parser')
+
+    first_result_link = soup.find(name='div', attrs=GOOGLE_SEARCH_RESULTS_ATTRS).findChild(name='a').get(key='href')
+    res = requests.get(first_result_link, headers=HEADERS_GET).text
+    with open(r"C:\Users\User\Music\{album}.html".format(album=album_title), "w", encoding='UTF-8') as f:
+        f.write(res)
+
+    soup = BeautifulSoup(res, 'html.parser')
+
+    tracklist_table = soup.find(name='table', attrs={'class', 'tracklist'})
+    table_headers = [th.text for th in tracklist_table.find(name='tr').find_all('th')]
+    title_column_index = table_headers.index('Title')
+    length_column_index = table_headers.index('Length')
+
+
+    wiki_songs_dict = {}
+    for row in tracklist_table.find_all(name='tr'):
+        columns = row.find_all(name='td')
+        if len(columns) == len(table_headers):
+            title_regex = re.compile(r'\w.*')
+            length_regex = re.compile(r'\d{1,2}:\d{1,2}')
+
+            titles = columns[title_column_index].get_text(separator='======').split('======')
+            #print(titles)
+            #print([title_regex.match(txt) for txt in titles])
+            #print(list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles])))
+            title_match = list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[0]
+            title = title_match.string.strip('\n')
+
+            lengthes = columns[length_column_index].get_text(separator='======').split('======')
+            length_match = list(filter(lambda len_try: len_try is not None, [length_regex.match(txt.strip('"')) for txt in lengthes]))[0]
+            length = length_match.string.strip('\n')
+            wiki_songs_dict[title] = length
+            print('title={}, length={}'.format(title, length))
+
+
+    return wiki_songs_dict
 
 
 def find_album_songs(album_title, artist):
@@ -44,10 +99,12 @@ def find_album_songs(album_title, artist):
 
     if soup.find(attrs=GOOGLE_LENGTH_TAG_ATTRS) is not None:
         lengths = [tag.text for tag in soup.find_all(attrs=GOOGLE_LENGTH_TAG_ATTRS)]
-    else:
-        lengths = [None] * len(songs)
+        songs_dict = dict(zip(songs, lengths))
 
-    return dict(zip(songs, lengths))
+    else:
+        songs_dict = find_album_songs_wiki(album_title, artist, google_songs=songs)
+
+    return songs_dict
 
 
 def __score_video_name__(soup, song_title, artist, num_of_choices):
@@ -280,7 +337,6 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
                 print("{} failed. trying again...".format(song_title))
 
     return output_file
-
 
 def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=0, year=""):
     """
