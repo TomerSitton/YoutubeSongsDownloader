@@ -1,20 +1,22 @@
-import requests
-from bs4 import BeautifulSoup
 import re
 from datetime import datetime
-import youtube_dl
-import ffmpeg
-from shutil import move as movefile
 from os import remove as removefile
+from shutil import move as movefile
 
+import ffmpeg
+import requests
+import youtube_dl
+from bs4 import BeautifulSoup
 
-#TODO - use youtubedl for the video length, title, viewcount etc...?
+# TODO - use youtubedl for the video length, title, viewcount etc...?
+from bestOfArtist import getTheBestOfArtist
 
-MODE = 'DEBUG'
+# MODE = 'DEBUG'
+MODE = 'PRO'
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
-    #'User-Agent': 'Mozilla/5.0 (Linux; Android 7.0; SAMSUNG SM-G950F Build/NRD90M) AppleWebKit/537.36 (KHTML, like '
+    # 'User-Agent': 'Mozilla/5.0 (Linux; Android 7.0; SAMSUNG SM-G950F Build/NRD90M) AppleWebKit/537.36 (KHTML, like '
     #             'Gecko) SamsungBrowser/5.2 Chrome/51.0.2704.106 Mobile Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
@@ -24,7 +26,7 @@ HEADERS_GET = {
     'Upgrade-Insecure-Requests': '1'
 }
 GOOGLE_SONG_TAG_ATTRS = {"class": "title"}
-#GOOGLE_LENGTH_TAG_ATTRS = [{"class": "NmQOSc"}, {"class": "ooYbic"}]
+# GOOGLE_LENGTH_TAG_ATTRS = [{"class": "NmQOSc"}, {"class": "ooYbic"}]
 GOOGLE_LENGTH_TAG_ATTRS = {"class": "Li8Y0e fRmlm"}
 YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}
 YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}
@@ -131,7 +133,8 @@ def __score_video_length__(soup, num_of_choices, wanted_length=None, accepted_se
         if wanted_length.count(':') == 2:
             time_format = '%H:' + time_format
         wanted_time = datetime.strptime(wanted_length, time_format)
-        item_times = [tag.text.split('- Duration:')[1].strip().strip('.') if '- Duration:' in tag.text else None for tag in tags]
+        item_times = [tag.text.split('- Duration:')[1].strip().strip('.') if '- Duration:' in tag.text else None for tag
+                      in tags]
         for i, time in enumerate(item_times):
             if time is None:
                 delta[i] = 9999
@@ -270,7 +273,7 @@ def download_song(song_title, artist, wanted_length=None, output_dir=r"C:\Users\
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192'
-            }]
+        }]
     }
 
     for i in range(3):
@@ -299,9 +302,9 @@ def add_mp3_metadata(file, title='Unknown', album='Unknown', artist='Unknown', i
         'metadata:g:3': "track={}".format(index)
     }
     out = (
-    ffmpeg
-        .input(tmp_file)
-        .output(file, **kwargs)
+        ffmpeg
+            .input(tmp_file)
+            .output(file, **kwargs)
     )
     out.run()
     removefile(tmp_file)
@@ -318,30 +321,41 @@ def recieve_album_request():
 
     albums = []
 
-    album_title = input("Album Title:(Enter to exit)\n")
-    artist = input("Album Artist:\n")
-
-    while album_title is not "" and artist is not "":
-        albums.append((album_title, artist))
+    if input("do u want specific albums or best of artist (1 for specific, 2 for best of) \n") == '1':
         album_title = input("Album Title:(Enter to exit)\n")
-        if album_title is not "":
-            artist = input("Album Artist:(Enter to exit)\n")
+        artist = input("Album Artist:\n")
 
-    return albums
+        while album_title is not "" and artist is not "":
+            albums.append((album_title, artist))
+            album_title = input("Album Title:(Enter to exit)\n")
+            if album_title is not "":
+                artist = input("Album Artist:(Enter to exit)\n")
+
+        return albums
+    else:
+        artist = input("Artist:\n")
+        howMany = int(input("how many albums do you want from that artist\n"))
+
+        while artist is not "":
+            albums += getTheBestOfArtist(artist, howMany)
+            artist = input("Artist:(Enter to exit)\n")
+        return albums
+
 
 def main():
     albums = recieve_album_request()
+    print(albums)
     for album_title, artist in albums:
         songs_dict = find_album_songs(album_title, artist)
 
         print("songs dict: {}\n".format(songs_dict))
 
         for i, song_title in enumerate(songs_dict):
-            song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title])
+            song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title], output_dir=r"C:\Users\talsi\Desktop\music from tomer")
             if song_path is None:
                 print("failed download {}. please try again later".format(song_title))
                 continue
-            add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+            # add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
 
 if __name__ == "__main__":
