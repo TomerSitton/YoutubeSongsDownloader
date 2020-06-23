@@ -23,14 +23,17 @@ def fromTopTen(artist, howMany):
     res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
 
-    name = [tag.text for tag in soup.find_all(attrs={"class": "LC20lb DKV0Md"})][0]
+    name = [tag.text for tag in soup.find_all(attrs={"class": "LC20lb DKV0Md"})]
+    if not name:
+        return None
+
+    name = name[0]
     tag = [tag for tag in soup.find_all(attrs={"class": "r"})][0]
     items_hrefs = tag.find_next('a', href=True).get('href')
 
     if "album" not in name.lower():
         return None
 
-    print(name)
     print(items_hrefs)
     res = requests.get(items_hrefs, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
@@ -42,8 +45,9 @@ def fromTopTen(artist, howMany):
 
     for i in range(stuff):
         albums[i] = albums[i].split('\n')[1]
-        albums[i]=albums[i].split(" ", 1)[1]
+        albums[i] = albums[i].split(" ", 1)[1]
         toReturn.append((albums[i], artist))
+    print("from The Top Ten")
     return toReturn
 
 
@@ -55,9 +59,9 @@ def fromMetacritic(artist, howMany):
     res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
     albums = [tag.text for tag in soup.find_all(attrs=METACRITIC_ALBUMS_TAG_ATTRS)]
-    gamesOrMusic = [tag.text for tag in soup.find_all(attrs=METACRITIC_ACTIVE_TAG_ATTRS)][0]
+    gamesOrMusic = [tag.text for tag in soup.find_all(attrs=METACRITIC_ACTIVE_TAG_ATTRS)]
     print(gamesOrMusic)
-    if albums and gamesOrMusic == "Music":
+    if albums and gamesOrMusic and gamesOrMusic[0] == "Music":
         if len(albums) < howMany:
             stuff = len(albums)
         else:
@@ -66,7 +70,7 @@ def fromMetacritic(artist, howMany):
             albums[i] = albums[i][4:]
             albums[i] = albums[i][:-1]
             toReturn.append((albums[i], artist))
-        print(albums)
+        print("from Metacritic")
         return toReturn
 
 
@@ -87,6 +91,7 @@ def fromRateYourMusic(artist, howMany):
         stuff = howMany
     for i in range(stuff):
         toReturn.append((z[i], artist))
+    print("from Rate Your Music")
     return toReturn
 
 
@@ -100,3 +105,7 @@ def getTheBestOfArtist(artist, howMany):
     j = fromRateYourMusic(artist, howMany)
     if j is not None:
         return j
+
+
+if __name__ == '__main__':
+    print(getTheBestOfArtist("green day", 5))
