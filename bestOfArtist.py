@@ -105,7 +105,4 @@ def getTheBestOfArtist(artist, howMany):
     j = fromRateYourMusic(artist, howMany)
     if j is not None:
         return j
-
-
-if __name__ == '__main__':
-    print(getTheBestOfArtist("green day", 5))
+    return None
