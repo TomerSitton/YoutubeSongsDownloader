@@ -11,9 +11,6 @@ from bs4 import BeautifulSoup
 # TODO - use youtubedl for the video length, title, viewcount etc...?
 from bestOfArtist import getTheBestOfArtist
 
-# MODE = 'DEBUG'
-MODE = 'PRO'
-
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
     # 'User-Agent': 'Mozilla/5.0 (Linux; Android 7.0; SAMSUNG SM-G950F Build/NRD90M) AppleWebKit/537.36 (KHTML, like '
@@ -48,10 +45,6 @@ def find_album_songs(album_title, artist):
     search = "https://www.google.com/search?q={query}+songs&ie=utf-8&oe=utf-8'".format(query=query)
     res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
-
-    if MODE == 'DEBUG':
-        with open(R"C:\Users\User\git\YoutubeSongsDownloader\{}.html".format(album_title), 'w', encoding='utf-8') as f:
-            f.write(res)
 
     songs = [tag.text for tag in soup.find_all(attrs=GOOGLE_SONG_TAG_ATTRS)]
 
@@ -314,14 +307,15 @@ def recieve_album_request():
     usage_msg = """
         Hi there!
         This program is designed to download full albums from youtube!
-        Enter the name of the artist and the album.
+        you can download the best albums of an artist by typing the artist and the amount of albums or
+        download a specific album by typing the name of the artist and the album.
         When finished - press enter!
-        """
-    print(usage_msg)
-
+        
+        do you want to download a specific albums or the best albums of an artist? ( type 1 for a specific album, 2 for best albums of an artist)
+"""
     albums = []
 
-    if input("do u want specific albums or best of artist (1 for specific, 2 for best of) \n") == '1':
+    if input(usage_msg) == '1':
         album_title = input("Album Title:(Enter to exit)\n")
         artist = input("Album Artist:\n")
 
@@ -331,15 +325,15 @@ def recieve_album_request():
             if album_title is not "":
                 artist = input("Album Artist:(Enter to exit)\n")
 
-        return albums
     else:
-        artist = input("Artist:\n")
+        artist = input("The artist:\n")
         howMany = int(input("how many albums do you want from that artist\n"))
 
         while artist is not "":
-            albums += getTheBestOfArtist(artist, howMany)
+            best_of=getTheBestOfArtist(artist, howMany)
+            albums += best_of if best_of is not None else []
             artist = input("Artist:(Enter to exit)\n")
-        return albums
+    return albums
 
 
 def main():
@@ -351,11 +345,11 @@ def main():
         print("songs dict: {}\n".format(songs_dict))
 
         for i, song_title in enumerate(songs_dict):
-            song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title], output_dir=r"C:\Users\talsi\Desktop\music from tomer")
+            song_path = download_song(song_title, artist, wanted_length=songs_dict[song_title])
             if song_path is None:
                 print("failed download {}. please try again later".format(song_title))
                 continue
-            # add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+            add_mp3_metadata(file=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
 
 if __name__ == "__main__":
