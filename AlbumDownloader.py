@@ -54,7 +54,6 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
     title_column_index = table_headers.index('Title')
     length_column_index = table_headers.index('Length')
 
-
     wiki_songs_dict = {}
     for row in tracklist_table.find_all(name='tr'):
         columns = row.find_all(name='td')
@@ -63,14 +62,17 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
             length_regex = re.compile(r'\d{1,2}:\d{1,2}')
 
             titles = columns[title_column_index].get_text(separator='======').split('======')
-            title_match = list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[0]
+            title_match = list(
+                filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[
+                0]
             title = title_match.string.strip('\n')
 
             lengthes = columns[length_column_index].get_text(separator='======').split('======')
-            length_match = list(filter(lambda len_try: len_try is not None, [length_regex.match(txt.strip('"')) for txt in lengthes]))[0]
+            length_match = \
+            list(filter(lambda len_try: len_try is not None, [length_regex.match(txt.strip('"')) for txt in lengthes]))[
+                0]
             length = length_match.string.strip('\n')
             wiki_songs_dict[title] = length
-
 
     return wiki_songs_dict
 
@@ -310,7 +312,6 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
         }]
     }
 
-
     try:
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
             ydl.download([chosen])
@@ -327,6 +328,7 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
             raise e
 
     return output_file
+
 
 def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=0, year=""):
     """
@@ -377,7 +379,12 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
     audio.save(file_path)
 
 
-def recieve_album_request():
+def receive_album_request():
+    """
+    This function receives the sets of album and artist the user wants to download, and returns a list of them.
+    :return: list of tuples of artist and album. [(artist0, album0), (artist1, album1), (artist2, album2)]
+    :rtype: list of tuples of strings. [(str,str),(str,str),(str,str)]
+    """
     usage_msg = """
         Hi there!
         This program is designed to download full albums from youtube!
@@ -392,7 +399,7 @@ def recieve_album_request():
     artist = input("Album Artist:\n")
 
     while album_title is not "" and artist is not "":
-        albums.append((album_title, artist))
+        albums.append((artist, album_title))
         album_title = input("Album Title:(Enter to exit)\n")
         if album_title is not "":
             artist = input("Album Artist:(Enter to exit)\n")
@@ -401,11 +408,10 @@ def recieve_album_request():
 
 
 def main():
-
-    albums = recieve_album_request()
+    albums = receive_album_request()
     output_dir = expanduser("~\\Music")
 
-    for album_title, artist in albums:
+    for artist, album_title in albums:
         songs_dict = find_album_songs(album_title, artist)
 
         print("songs dict: {}\n".format(songs_dict))
@@ -413,7 +419,6 @@ def main():
         for i, song_title in enumerate(songs_dict):
             song_path = download_song(song_title, artist, output_dir=output_dir, wanted_length=songs_dict[song_title])
             if song_path is None:
-                print("failed download {}. please try again later".format(song_title))
                 continue
             add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
