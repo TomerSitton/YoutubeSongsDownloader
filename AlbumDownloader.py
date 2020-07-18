@@ -378,7 +378,6 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
 
     audio.save(file_path)
 
-
 def receive_album_request():
     """
     This function receives the sets of album and artist the user wants to download, and returns a list of them.
@@ -411,16 +410,21 @@ def main():
     albums = receive_album_request()
     output_dir = expanduser("~\\Music")
 
-    for artist, album_title in albums:
-        songs_dict = find_album_songs(album_title, artist)
+    failed_downloads = {(artist, album): [] for (artist, album) in albums}
+
+    for artist, album in albums:
+        songs_dict = find_album_songs(album, artist)
 
         print("songs dict: {}\n".format(songs_dict))
 
         for i, song_title in enumerate(songs_dict):
             song_path = download_song(song_title, artist, output_dir=output_dir, wanted_length=songs_dict[song_title])
             if song_path is None:
+                failed_downloads[(artist, album)].append(song_title)
                 continue
-            add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+            add_mp3_metadata(file_path=song_path, title=song_title, album=album, artist=artist, index=i + 1)
+
+    print("FAILED downloads: {}".format(failed_downloads))
 
 
 if __name__ == "__main__":
