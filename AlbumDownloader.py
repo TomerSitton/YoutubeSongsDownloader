@@ -24,6 +24,7 @@ YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
 GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
 GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
 
+
 def find_album_songs_wiki(album_title, artist, google_songs=[]):
     """
     Search "<artist>+<album_title>+songs" in wikipedia.
@@ -62,9 +63,6 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
             length_regex = re.compile(r'\d{1,2}:\d{1,2}')
 
             titles = columns[title_column_index].get_text(separator='======').split('======')
-            #print(titles)
-            #print([title_regex.match(txt) for txt in titles])
-            #print(list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles])))
             title_match = list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[0]
             title = title_match.string.strip('\n')
 
@@ -72,7 +70,6 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
             length_match = list(filter(lambda len_try: len_try is not None, [length_regex.match(txt.strip('"')) for txt in lengthes]))[0]
             length = length_match.string.strip('\n')
             wiki_songs_dict[title] = length
-            print('title={}, length={}'.format(title, length))
 
 
     return wiki_songs_dict
