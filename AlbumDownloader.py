@@ -9,7 +9,7 @@ from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHead
 from pydub import AudioSegment
 import Google
 import Wikipedia
-
+import Youtube
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
@@ -235,9 +235,7 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     :param output_dir: the dir to save the downloaded file in
     :return:
     """
-    query = 'https://www.youtube.com/results?search_query={artist}+{title}+lyrics'.format(artist=artist,
-                                                                                          title=song_title)
-    chosen = None
+    query = Youtube.URLize_search('{artist} {title} lyrics'.format(artist=artist,title=song_title))
 
     res = requests.get(query).text  # not using headers intentionally - returns easier to handle data without it
     soup = BeautifulSoup(res, 'html.parser')
