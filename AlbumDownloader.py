@@ -289,23 +289,16 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     query = 'https://www.youtube.com/results?search_query={artist}+{title}+lyrics'.format(artist=artist,
                                                                                           title=song_title)
     chosen = None
-    for i in range(3):
-        try:
-            res = requests.get(query).text  # not using headers intentionally - returns easier to handle data without it
-            soup = BeautifulSoup(res, 'html.parser')
-            chosen = choose_video(soup, song_title, artist, wanted_length)
-            break
-        except Exception as e:
-            print("filed finding/paresing {} . trying again...".format(song_title))
+
+    res = requests.get(query).text  # not using headers intentionally - returns easier to handle data without it
+    soup = BeautifulSoup(res, 'html.parser')
+    chosen = choose_video(soup, song_title, artist, wanted_length)
 
     if chosen is None:
         print("cant find or parse {} on youtube".format(song_title))
-        try:
-            with open(r"C:\Users\User\git\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(
-                    artist=artist, title=song_title), 'w', encoding='utf-8') as f:
-                f.write(res)
-        except:
-            pass
+        with open(r"C:\Users\User\git\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(
+                artist=artist, title=song_title), 'w', encoding='utf-8') as f:
+            f.write(res)
         return
 
     output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
@@ -320,21 +313,21 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
         }]
     }
 
-    for i in range(3):
-        try:
-            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([chosen])
-            output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
-            break
-        except Exception as e:
-            print("e= " + str(e))
-            if str(e) in "ERROR: ffprobe/avprobe and ffmpeg/avconv not found. Please install one.":
-                output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title,
-                                                                       artist=artist)
-                break
-            else:
-                output_file = None
-                print("{} failed. trying again...".format(song_title))
+
+    try:
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([chosen])
+        output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
+    except Exception as e:
+        print("e= " + str(e))
+        if str(e) in "ERROR: ffprobe/avprobe and ffmpeg/avconv not found. Please install one.":
+            output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title,
+                                                                   artist=artist)
+            print("no ffprobe? check if works even without")
+            raise e
+        else:
+            print("exception in youtube-dl")
+            raise e
 
     return output_file
 
@@ -366,13 +359,13 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
         return
     except Exception as e:
         print("unhandled exception in converting {} to mp3: {}".format(title, e))
-        return
+        raise e
 
     if title is 'Unknown':
         title = file_path.split('\\')[-1].split('.')[0]
     try:
         audio = ID3(file_path)
-    except ID3NoHeaderError as e:
+    except ID3NoHeaderError:
         audio = ID3()
 
     audio.add(TIT2(encoding=3, text=title))
