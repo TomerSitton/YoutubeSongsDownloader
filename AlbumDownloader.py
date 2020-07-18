@@ -90,7 +90,7 @@ def find_album_songs(album_title, artist):
     :rtype: dict of {string: string}. for example: {"song_exm": "03:25"}
     """
     query = "{art} {title}".format(art=artist, title=album_title).replace(" ", "+")
-    search = "https://www.google.com/search?q={query}+songs&ie=utf-8&oe=utf-8'".format(query=query)
+    search = "https://www.google.com/search?q={query}+songs&ie=utf-8&oe=utf-8".format(query=query)
     res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
 
