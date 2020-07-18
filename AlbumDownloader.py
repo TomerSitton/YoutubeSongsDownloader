@@ -7,6 +7,9 @@ import youtube_dl
 from bs4 import BeautifulSoup
 from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, USLT, TCON, Encoding
 from pydub import AudioSegment
+import Google
+import Wikipedia
+
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
@@ -17,71 +20,22 @@ HEADERS_GET = {
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1'
 }
-GOOGLE_SONG_TAG_ATTRS = {"class": "title"}  # google album search
-GOOGLE_LENGTH_TAG_ATTRS = {"class": "Li8Y0e fRmlm"}  # google album search
+
 YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}  # youtube song search
 YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
 GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
-GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
 
-
-def find_album_songs_wiki(album_title, artist, google_songs=[]):
-    """
-    Search "<artist>+<album_title>+songs" in wikipedia.
-    return a dictionary with the songs names as keys and the songs lengths
-    as values (if no length tag in the google search, lengths will be None).
-    :param album_title: The name of the album
-    :type album_title: str
-    :param artist: The artist of the album
-    :type artist: str
-    :return: A dict of the songs names as keys and lengths as values
-    :rtype: dict of {string: string}. for example: {"song_exm": "03:25"}
-    """
-    query = "{art} {title}".format(art=artist, title=album_title).replace(" ", "+")
-    search = "https://www.google.com/search?q={query}+site:en.wikipedia.org&ie=utf-8&oe=utf-8".format(query=query)
-    res = requests.get(search, headers=HEADERS_GET).text
-    soup = BeautifulSoup(res, 'html.parser')
-
-    first_result_link = soup.find(name='div', attrs=GOOGLE_SEARCH_RESULTS_ATTRS).findChild(name='a').get(key='href')
-    res = requests.get(first_result_link, headers=HEADERS_GET).text
-    with open(r"C:\Users\User\Music\{album}.html".format(album=album_title), "w", encoding='UTF-8') as f:
-        f.write(res)
-
-    soup = BeautifulSoup(res, 'html.parser')
-
-    tracklist_table = soup.find(name='table', attrs={'class', 'tracklist'})
-    table_headers = [th.text for th in tracklist_table.find(name='tr').find_all('th')]
-    title_column_index = table_headers.index('Title')
-    length_column_index = table_headers.index('Length')
-
-    wiki_songs_dict = {}
-    for row in tracklist_table.find_all(name='tr'):
-        columns = row.find_all(name='td')
-        if len(columns) == len(table_headers):
-            title_regex = re.compile(r'\w.*')
-            length_regex = re.compile(r'\d{1,2}:\d{1,2}')
-
-            titles = columns[title_column_index].get_text(separator='======').split('======')
-            title_match = list(
-                filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[
-                0]
-            title = title_match.string.strip('\n')
-
-            lengthes = columns[length_column_index].get_text(separator='======').split('======')
-            length_match = \
-            list(filter(lambda len_try: len_try is not None, [length_regex.match(txt.strip('"')) for txt in lengthes]))[
-                0]
-            length = length_match.string.strip('\n')
-            wiki_songs_dict[title] = length
-
-    return wiki_songs_dict
 
 
 def find_album_songs(album_title, artist):
     """
-    Search "<artist>+<album_title>+songs" in google.
-    return a dictionary with the songs names as keys and the songs lengths
-    as values (if no length tag in the google search, lengths will be None).
+    Search "<artist>+<album_title>+songs" on google.
+    if search did not get the expected html result, or the result does not contain the lengths of the songs,
+    search the "<artist>+<album_title>+songs" on Wikipedia.
+    return a dictionary with the songs names as keys and the songs lengths as values.
+    if failed to find the album in both google and Wikipedia, return an empty dict.
+    if failed to find the lengths of the songs in both google and Wikipedia, lengths will be None.
+
     :param album_title: The name of the album
     :type album_title: str
     :param artist: The artist of the album
@@ -89,19 +43,15 @@ def find_album_songs(album_title, artist):
     :return: A dict of the songs names as keys and lengths as values
     :rtype: dict of {string: string}. for example: {"song_exm": "03:25"}
     """
-    query = "{art} {title}".format(art=artist, title=album_title).replace(" ", "+")
-    search = "https://www.google.com/search?q={query}+songs&ie=utf-8&oe=utf-8".format(query=query)
-    res = requests.get(search, headers=HEADERS_GET).text
-    soup = BeautifulSoup(res, 'html.parser')
+    songs_dict = Google.get_albums_songs(artist, album_title)
 
-    songs = [tag.text for tag in soup.find_all(attrs=GOOGLE_SONG_TAG_ATTRS)]
-
-    if soup.find(attrs=GOOGLE_LENGTH_TAG_ATTRS) is not None:
-        lengths = [tag.text for tag in soup.find_all(attrs=GOOGLE_LENGTH_TAG_ATTRS)]
-        songs_dict = dict(zip(songs, lengths))
-
-    else:
-        songs_dict = find_album_songs_wiki(album_title, artist, google_songs=songs)
+    if not songs_dict:
+        songs_dict = Wikipedia.get_albums_songs(artist, album_title)
+    elif None in songs_dict.values():
+        wiki_songs_dict = Wikipedia.get_albums_songs(artist, album_title)
+        if wiki_songs_dict:
+            if None not in wiki_songs_dict.values():
+                songs_dict = wiki_songs_dict
 
     return songs_dict
 
@@ -377,6 +327,7 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
     audio['TYER'] = TYER(encoding=Encoding.UTF8, text=str(year))  # Year Of Recording
 
     audio.save(file_path)
+
 
 def receive_album_request():
     """
