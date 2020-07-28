@@ -255,7 +255,7 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
     print("wanted data: {} {} {}".format(song_title, artist, wanted_length))
 
     tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choices]
-    if tags is []:
+    if not tags:
         print("NO VIDEOS FOUND FOR SONG: {}".format(song_title))
         return
 
