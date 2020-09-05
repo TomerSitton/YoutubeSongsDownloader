@@ -314,7 +314,6 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     print("lolololololol")
     videos = youtube.videos().list(part="snippet,contentDetails,statistics", id=ids).execute()
     videoItems = videos["items"]
-    input("m")
 
     chosen = None
     for i in range(3):
