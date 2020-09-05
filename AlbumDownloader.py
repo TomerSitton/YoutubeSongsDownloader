@@ -27,7 +27,7 @@ YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
 GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
 GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
 
-api_key = dsa = important.APIKey.api_key
+api_key =important.APIKey.api_key
 
 
 def find_album_songs_wiki(album_title, artist, google_songs=[]):
