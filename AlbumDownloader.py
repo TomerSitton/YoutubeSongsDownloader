@@ -1,11 +1,12 @@
-from os.path import expanduser
 import re
 from datetime import datetime
-from tkinter.filedialog import askdirectory
+from os.path import expanduser
+
 import requests
 import youtube_dl
 from bs4 import BeautifulSoup
-from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, USLT, TCON, Encoding
+from googleapiclient.discovery import build
+from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, Encoding
 from pydub import AudioSegment
 
 HEADERS_GET = {
@@ -23,6 +24,9 @@ YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}  # youtube song search
 YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
 GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
 GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
+
+api_key = 'AIzaSyA1YlHNnojfrZM79k70IkhzPZrGvS_yJDc'
+
 
 def find_album_songs_wiki(album_title, artist, google_songs=[]):
     """
@@ -53,7 +57,6 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
     title_column_index = table_headers.index('Title')
     length_column_index = table_headers.index('Length')
 
-
     wiki_songs_dict = {}
     for row in tracklist_table.find_all(name='tr'):
         columns = row.find_all(name='td')
@@ -62,18 +65,22 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
             length_regex = re.compile(r'\d{1,2}:\d{1,2}')
 
             titles = columns[title_column_index].get_text(separator='======').split('======')
-            #print(titles)
-            #print([title_regex.match(txt) for txt in titles])
-            #print(list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles])))
-            title_match = list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[0]
+            # print(titles)
+            # print([title_regex.match(txt) for txt in titles])
+            # print(list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles])))
+            title_match = list(
+                filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[
+                0]
             title = title_match.string.strip('\n')
 
             lengthes = columns[length_column_index].get_text(separator='======').split('======')
-            length_match = list(filter(lambda len_try: len_try is not None, [length_regex.match(txt.strip('"')) for txt in lengthes]))[0]
+            length_match = \
+                list(filter(lambda len_try: len_try is not None,
+                            [length_regex.match(txt.strip('"')) for txt in lengthes]))[
+                    0]
             length = length_match.string.strip('\n')
             wiki_songs_dict[title] = length
             print('title={}, length={}'.format(title, length))
-
 
     return wiki_songs_dict
 
@@ -248,6 +255,7 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
     :param num_of_choices: the number of videos to choose from. not more than 5.
     :type num_of_choices: int
     """
+
     if num_of_choices > 5:
         print("no more than 5 options")
         raise ValueError
@@ -258,7 +266,6 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
     if not tags:
         print("NO VIDEOS FOUND FOR SONG: {}".format(song_title))
         return
-
     score = [0] * num_of_choices
     score = [x + y for x, y in zip(score, __score_video_position__(num_of_choices))]
     score = [x + y for x, y in zip(score, __score_video_name__(soup, song_title, artist, num_of_choices))]
@@ -286,6 +293,18 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     :param output_dir: the dir to save the downloaded file in
     :return:
     """
+
+
+    youtube = build(serviceName='youtube', version='v3', developerKey=api_key)
+    request = youtube.search().list(part="snippet",q="{artist} {title} lyrics".format(artist=artist,title=song_title))
+    respond = request.execute()
+    item=respond['items']
+    print(item[0]["snippet"]["title"])
+    print(item[0]["snippet"])
+    print(type(respond))
+    print("lolololololol")
+
+
     query = 'https://www.youtube.com/results?search_query={artist}+{title}+lyrics'.format(artist=artist,
                                                                                           title=song_title)
     chosen = None
@@ -301,10 +320,14 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     if chosen is None:
         print("cant find or parse {} on youtube".format(song_title))
         try:
-            with open(r"C:\Users\User\git\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(
-                    artist=artist, title=song_title), 'w', encoding='utf-8') as f:
+            with open(
+                    r"C:\Users\talsi\Documents\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(
+                        artist=artist, title=song_title), 'w+', encoding='utf-8') as f:
                 f.write(res)
-        except:
+                f.close()
+                print("llll")
+        except Exception as e:
+            print("vey vey {}".format(e))
             pass
         return
 
@@ -337,6 +360,7 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
                 print("{} failed. trying again...".format(song_title))
 
     return output_file
+
 
 def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=0, year=""):
     """
@@ -411,7 +435,6 @@ def recieve_album_request():
 
 
 def main():
-
     albums = recieve_album_request()
     output_dir = expanduser("~\\Music")
 
