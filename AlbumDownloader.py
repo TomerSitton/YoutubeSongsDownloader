@@ -116,7 +116,7 @@ def find_album_songs(album_title, artist):
     return songs_dict
 
 
-def __score_video_name__(soup, song_title, artist, num_of_choices):
+def __score_video_name__(video_items, song_title, artist, num_of_choices):
     """
     give score to the videos by their title.
     artist in video name grants 0.5 points, and song_title grants 1 point.
@@ -124,8 +124,8 @@ def __score_video_name__(soup, song_title, artist, num_of_choices):
     Forbidden words:
         1. cover
         2. live
-    :param soup: the soup of the youtube request
-    :type soup: BeautifulSoup object
+    :param video_items: the list of youtube videos from youtube api
+    :type video_items: list of videos from youtube api
     :param song_title: the title of the song
     :type song_title: str
     :param artist: the artist of the song
@@ -137,8 +137,7 @@ def __score_video_name__(soup, song_title, artist, num_of_choices):
     """
     forbidden_words = re.compile('.*\W(cover|live)\W.*', re.IGNORECASE)
     score = [0] * num_of_choices
-    tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choices]
-    item_names = [tag.text.split('- Duration:')[0] for tag in tags]
+    item_names = [video["snippet"]["title"] for video in video_items]
     for i, name in enumerate(item_names):
         if song_title.lower() in name.lower():
             score[i] += 1
@@ -161,7 +160,7 @@ def __score_video_position__(num_of_choices):
     return [n for n in range(num_of_choices * 2, 0, -2)]
 
 
-def __score_video_length__(soup, num_of_choices, wanted_length=None, accepted_seconds_error=10):
+def __score_video_length__(video_items, num_of_choices, wanted_length=None, accepted_seconds_error=10):
     """
     give score to the videos by their lengths.
     if wanted_length given, the videos which:
@@ -170,8 +169,8 @@ def __score_video_length__(soup, num_of_choices, wanted_length=None, accepted_se
     will get a score of 5.
     if wanted_length given, all other videos will get -9999 score.
     if wanted_length not given, score will be 0 for all videos.
-    :param soup: the soup of the youtube request
-    :type soup: BeautifulSoup object
+    :param video_items: the list of youtube videos from youtube api
+    :type video_items: list of videos from youtube api
     :param wanted_length: The desired length of the song. example: "2:15"
     :type wanted_length: str
     :param num_of_choices: the number of videos to choose from
@@ -179,24 +178,29 @@ def __score_video_length__(soup, num_of_choices, wanted_length=None, accepted_se
     :return: list of scores of the videos. sorted as the videos are sorted in the youtube search result.
     :rtype: list of ints
     """
-    tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choices]
     delta = [9999] * num_of_choices
     if wanted_length is not None:
         time_format = '%M:%S'
         if wanted_length.count(':') == 2:
             time_format = '%H:' + time_format
         wanted_time = datetime.strptime(wanted_length, time_format)
-        item_times = [tag.text.split('- Duration:')[1].strip().strip('.') if '- Duration:' in tag.text else None for tag
-                      in tags]
+        wanted_seconds = wanted_time.second + wanted_time.minute * 60 + wanted_time.hour * 3600
+
+        print("wanted seconds OK "+str(wanted_seconds))
+
+        item_times = [length["contentDetails"]["duration"].strip("PTS").replace("M", ":") for length in video_items]
+        item_times = [int(length.split(":")[0]) * 60 + int(length.split(":")[1]) for length in item_times]
+
+        print("actual seconds OK "+str(item_times))
+
         for i, time in enumerate(item_times):
             if time is None:
                 delta[i] = 9999
                 continue
-            time_format = '%M:%S'
-            if time.count(':') == 2:
-                time_format = '%H:' + time_format
-            option_time = datetime.strptime(time, time_format)
-            delta[i] = (max(wanted_time, option_time) - min(wanted_time, option_time)).seconds
+            delta[i] = max(wanted_seconds, time) - min(wanted_seconds, time)
+
+        print("delta OK")
+    else:print("no wanted length")
 
     score = [0] * num_of_choices
     for i in range(len(score)):
@@ -206,26 +210,25 @@ def __score_video_length__(soup, num_of_choices, wanted_length=None, accepted_se
             pass
         elif delta[i] == min(delta) or delta[i] < accepted_seconds_error:
             score[i] += 5
+    print("returned")
     return score
 
 
-def __score_video_views_count__(soup, num_of_choices):
+def __score_video_views_count__(video_items, num_of_choices):
     """
     give score to the videos by their views count.
     the item with the max views count get 2 points.
     the other items get 0 points.
     item with no views field (indicating its a playlist) gets -9999 points.
-    :param soup: the soup of the youtube request
-    :type soup: BeautifulSoup object
+    :param video_items: the list of youtube videos from youtube api
+    :type video_items: list of videos from youtube api
     :param num_of_choices: the number of videos to choose from
     :type num_of_choices: int
     :return: list of scores of the videos. sorted as the videos are sorted in the youtube search result.
     :rtype: list of ints
     """
     score = [0] * num_of_choices
-    item_views_text = [tag.text.split('ago')[-1] if 'views' in tag.text else '0 views' for tag in
-                       soup.find_all(attrs=YOUTUBE_VIEWS_ATTRS)][0:num_of_choices]
-    item_views = [int(string.split(' ')[0].replace(',', '')) for string in item_views_text]
+    item_views = [video["statistics"]["viewCount"] for video in video_items]
 
     for i in range(len(score)):
         if item_views[i] == max(item_views):
@@ -236,7 +239,7 @@ def __score_video_views_count__(soup, num_of_choices):
     return score
 
 
-def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3):
+def choose_video(video_items, song_title, artist, wanted_length=None, num_of_choices=3):
     """
     gets a soup of a youtube song search and song data, and returns the url of the most relevant video from the top
     num_of_choices videos.
@@ -245,8 +248,8 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
         2. The name of the video
         3. The diff between the length of the video and the wanted_length of the song
         4. The number of views of the video
-    :param soup: the soup of the youtube request
-    :type soup: BeautifulSoup object
+    :param video_items: the list of youtube videos from youtube api
+    :type video_items: list of videos from youtube api
     :param song_title: the title of the song
     :type song_title: str
     :param artist: the artist of the song
@@ -264,17 +267,21 @@ def choose_video(soup, song_title, artist, wanted_length=None, num_of_choices=3)
 
     print("wanted data: {} {} {}".format(song_title, artist, wanted_length))
 
-    tags = [tag for tag in soup.find_all(attrs=YOUTUBE_ITEM_ATTRS)][0:num_of_choices]
-    if not tags:
+    if not video_items:
         print("NO VIDEOS FOUND FOR SONG: {}".format(song_title))
         return
+    print("on scores")
     score = [0] * num_of_choices
+    print("what1?")
     score = [x + y for x, y in zip(score, __score_video_position__(num_of_choices))]
-    score = [x + y for x, y in zip(score, __score_video_name__(soup, song_title, artist, num_of_choices))]
-    score = [x + y for x, y in zip(score, __score_video_length__(soup, num_of_choices, wanted_length))]
-    score = [x + y for x, y in zip(score, __score_video_views_count__(soup, num_of_choices))]
-
-    items_hrefs = ['https://www.youtube.com/{}'.format(tag.find_next('a', href=True).get('href')) for tag in tags]
+    print("what2?")
+    score = [x + y for x, y in zip(score, __score_video_name__(video_items, song_title, artist, num_of_choices))]
+    print("what3?")
+    score = [x + y for x, y in zip(score, __score_video_length__(video_items, num_of_choices, wanted_length))]
+    print("what4?")
+    score = [x + y for x, y in zip(score, __score_video_views_count__(video_items, num_of_choices))]
+    print("what5?")
+    items_hrefs = ['https://www.youtube.com/watch?v={}'.format(video["id"]) for video in video_items]
 
     print("item hrefs: {}".format(items_hrefs))
     print("score:{}".format(score))
@@ -297,38 +304,28 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     """
 
     youtube = build(serviceName='youtube', version='v3', developerKey=api_key)
-    request = youtube.search().list(part="snippet", q="{artist} {title} lyrics".format(artist=artist, title=song_title))
+    request = youtube.search().list(part="snippet", maxResults=3,
+                                    q="{artist} {title} lyrics".format(artist=artist, title=song_title))
     respond = request.execute()
-    item = respond['items']
-    print(item[0]["snippet"]["title"])
-    print(item[0]["snippet"])
-    print(type(respond))
+    items = respond['items']
+    print([item["snippet"]["title"] for item in items])
+    ids = "".join(i["id"]["videoId"] + "," for i in items)[:-1]
+    print(ids)
     print("lolololololol")
+    videos = youtube.videos().list(part="snippet,contentDetails,statistics", id=ids).execute()
+    videoItems = videos["items"]
+    input("m")
 
-    query = 'https://www.youtube.com/results?search_query={artist}+{title}+lyrics'.format(artist=artist,
-                                                                                          title=song_title)
     chosen = None
     for i in range(3):
         try:
-            res = requests.get(query).text  # not using headers intentionally - returns easier to handle data without it
-            soup = BeautifulSoup(res, 'html.parser')
-            chosen = choose_video(soup, song_title, artist, wanted_length)
+            chosen = choose_video(videoItems, song_title, artist, wanted_length)
             break
         except Exception as e:
             print("filed finding/paresing {} . trying again...".format(song_title))
 
     if chosen is None:
         print("cant find or parse {} on youtube".format(song_title))
-        try:
-            with open(
-                    r"C:\Users\talsi\Documents\YoutubeSongsDownloader\search_query={artist}+{title}+lyrics.html".format(
-                        artist=artist, title=song_title), 'w+', encoding='utf-8') as f:
-                f.write(res)
-                f.close()
-                print("llll")
-        except Exception as e:
-            print("vey vey {}".format(e))
-            pass
         return
 
     output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
