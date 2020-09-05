@@ -9,6 +9,8 @@ from googleapiclient.discovery import build
 from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, Encoding
 from pydub import AudioSegment
 
+import important
+
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -25,7 +27,7 @@ YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
 GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
 GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
 
-api_key = 'AIzaSyA1YlHNnojfrZM79k70IkhzPZrGvS_yJDc'
+api_key = dsa = important.api_key
 
 
 def find_album_songs_wiki(album_title, artist, google_songs=[]):
@@ -294,16 +296,14 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     :return:
     """
 
-
     youtube = build(serviceName='youtube', version='v3', developerKey=api_key)
-    request = youtube.search().list(part="snippet",q="{artist} {title} lyrics".format(artist=artist,title=song_title))
+    request = youtube.search().list(part="snippet", q="{artist} {title} lyrics".format(artist=artist, title=song_title))
     respond = request.execute()
-    item=respond['items']
+    item = respond['items']
     print(item[0]["snippet"]["title"])
     print(item[0]["snippet"])
     print(type(respond))
     print("lolololololol")
-
 
     query = 'https://www.youtube.com/results?search_query={artist}+{title}+lyrics'.format(artist=artist,
                                                                                           title=song_title)
