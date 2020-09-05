@@ -9,7 +9,7 @@ from googleapiclient.discovery import build
 from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, Encoding
 from pydub import AudioSegment
 
-import important
+import important.APIKey as api
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
@@ -27,7 +27,7 @@ YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
 GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
 GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
 
-api_key =important.APIKey.api_key
+api_key = api.api_key
 
 
 def find_album_songs_wiki(album_title, artist, google_songs=[]):
