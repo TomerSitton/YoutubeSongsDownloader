@@ -1,12 +1,14 @@
-from os.path import expanduser
 import re
 from datetime import datetime
-from tkinter.filedialog import askdirectory
+from os.path import expanduser
+
 import requests
 import youtube_dl
 from bs4 import BeautifulSoup
-from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, USLT, TCON, Encoding
+from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, Encoding
 from pydub import AudioSegment
+
+from important.Lang import Lang
 
 HEADERS_GET = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:49.0) Gecko/20100101 Firefox/49.0',
@@ -24,7 +26,8 @@ YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
 GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
 GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
 
-def find_album_songs_wiki(album_title, artist, google_songs=[]):
+
+def find_album_songs_wiki(album_title, artist, current_lang, google_songs=[]):
     """
     Search "<artist>+<album_title>+songs" in wikipedia.
     return a dictionary with the songs names as keys and the songs lengths
@@ -33,11 +36,13 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
     :type album_title: str
     :param artist: The artist of the album
     :type artist: str
+    :param current_lang: the language of the song
+    :type current_lang: Lang
     :return: A dict of the songs names as keys and lengths as values
     :rtype: dict of {string: string}. for example: {"song_exm": "03:25"}
     """
     query = "{art} {title}".format(art=artist, title=album_title).replace(" ", "+")
-    search = "https://www.google.com/search?q={query}+site:en.wikipedia.org&ie=utf-8&oe=utf-8".format(query=query)
+    search = "https://www.google.com/search?q={query}+site:wikipedia.org&ie=utf-8&oe=utf-8".format(query=query)
     res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
 
@@ -50,9 +55,8 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
 
     tracklist_table = soup.find(name='table', attrs={'class', 'tracklist'})
     table_headers = [th.text for th in tracklist_table.find(name='tr').find_all('th')]
-    title_column_index = table_headers.index('Title')
-    length_column_index = table_headers.index('Length')
-
+    title_column_index = table_headers.index(current_lang.title())
+    length_column_index = table_headers.index(current_lang.length())
 
     wiki_songs_dict = {}
     for row in tracklist_table.find_all(name='tr'):
@@ -62,23 +66,27 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
             length_regex = re.compile(r'\d{1,2}:\d{1,2}')
 
             titles = columns[title_column_index].get_text(separator='======').split('======')
-            #print(titles)
-            #print([title_regex.match(txt) for txt in titles])
-            #print(list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles])))
-            title_match = list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[0]
+            # print(titles)
+            # print([title_regex.match(txt) for txt in titles])
+            # print(list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles])))
+            title_match = list(
+                filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[
+                0]
             title = title_match.string.strip('\n')
 
             lengthes = columns[length_column_index].get_text(separator='======').split('======')
-            length_match = list(filter(lambda len_try: len_try is not None, [length_regex.match(txt.strip('"')) for txt in lengthes]))[0]
+            length_match = \
+                list(filter(lambda len_try: len_try is not None,
+                            [length_regex.match(txt.strip('"')) for txt in lengthes]))[
+                    0]
             length = length_match.string.strip('\n')
             wiki_songs_dict[title] = length
             print('title={}, length={}'.format(title, length))
 
-
     return wiki_songs_dict
 
 
-def find_album_songs(album_title, artist):
+def find_album_songs(album_title, artist, current_lang):
     """
     Search "<artist>+<album_title>+songs" in google.
     return a dictionary with the songs names as keys and the songs lengths
@@ -87,11 +95,14 @@ def find_album_songs(album_title, artist):
     :type album_title: str
     :param artist: The artist of the album
     :type artist: str
+    :param current_lang: the language of the song
+    :type current_lang: Lang
     :return: A dict of the songs names as keys and lengths as values
     :rtype: dict of {string: string}. for example: {"song_exm": "03:25"}
     """
     query = "{art} {title}".format(art=artist, title=album_title).replace(" ", "+")
-    search = "https://www.google.com/search?q={query}+songs&ie=utf-8&oe=utf-8'".format(query=query)
+    search = "https://www.google.com/search?q={query}+{songs}&ie=utf-8&oe=utf-8'".format(query=query,
+                                                                                         songs=current_lang.songs())
     res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
 
@@ -102,7 +113,7 @@ def find_album_songs(album_title, artist):
         songs_dict = dict(zip(songs, lengths))
 
     else:
-        songs_dict = find_album_songs_wiki(album_title, artist, google_songs=songs)
+        songs_dict = find_album_songs_wiki(album_title, artist, current_lang, google_songs=songs)
 
     return songs_dict
 
@@ -338,6 +349,7 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
 
     return output_file
 
+
 def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=0, year=""):
     """
     adds tags for the mp3 file (artist, album etc.)
@@ -395,7 +407,7 @@ def recieve_album_request():
         When finished - press enter!
         """
     print(usage_msg)
-
+    lang = []
     albums = []
 
     album_title = input("Album Title:(Enter to exit)\n")
@@ -403,20 +415,22 @@ def recieve_album_request():
 
     while album_title is not "" and artist is not "":
         albums.append((album_title, artist))
+        lang.append(Lang(input("if the song is in hebrew write 'he' or 'ע', else press enter")))
         album_title = input("Album Title:(Enter to exit)\n")
         if album_title is not "":
             artist = input("Album Artist:(Enter to exit)\n")
 
-    return albums
+    return albums, lang
 
 
 def main():
-
-    albums = recieve_album_request()
+    albums, lang = recieve_album_request()
     output_dir = expanduser("~\\Music")
 
+    counter = 0
     for album_title, artist in albums:
-        songs_dict = find_album_songs(album_title, artist)
+        current_lang = lang[counter]
+        songs_dict = find_album_songs(album_title, artist, current_lang)
 
         print("songs dict: {}\n".format(songs_dict))
 
@@ -426,6 +440,7 @@ def main():
                 print("failed download {}. please try again later".format(song_title))
                 continue
             add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+        counter += 1
 
 
 if __name__ == "__main__":
