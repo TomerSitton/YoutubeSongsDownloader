@@ -5,7 +5,7 @@ from os.path import expanduser
 import requests
 import youtube_dl
 from bs4 import BeautifulSoup
-from googleapiclient.discovery import build
+from googleapiclient.discovery import build as youtube_build
 from mutagen.id3 import ID3, TPE1, TIT2, TPE2, TRCK, TALB, TORY, TYER, ID3NoHeaderError, Encoding
 from pydub import AudioSegment
 
@@ -47,7 +47,11 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
     res = requests.get(search, headers=HEADERS_GET).text
     soup = BeautifulSoup(res, 'html.parser')
 
-    first_result_link = soup.find(name='div', attrs=GOOGLE_SEARCH_RESULTS_ATTRS).findChild(name='a').get(key='href')
+    try:
+        first_result_link = soup.find(name='div', attrs=GOOGLE_SEARCH_RESULTS_ATTRS).findChild(name='a').get(key='href')
+    except AttributeError:
+        print("we didn't find anything that match what you wrote")
+        return
     res = requests.get(first_result_link, headers=HEADERS_GET).text
     with open(r"C:\Users\User\Music\{album}.html".format(album=album_title), "w", encoding='UTF-8') as f:
         f.write(res)
@@ -67,9 +71,6 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
             length_regex = re.compile(r'\d{1,2}:\d{1,2}')
 
             titles = columns[title_column_index].get_text(separator='======').split('======')
-            # print(titles)
-            # print([title_regex.match(txt) for txt in titles])
-            # print(list(filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles])))
             title_match = list(
                 filter(lambda title_try: title_try is not None, [title_regex.match(txt.strip('"')) for txt in titles]))[
                 0]
@@ -116,7 +117,7 @@ def find_album_songs(album_title, artist):
     return songs_dict
 
 
-def __score_video_name__(video_items, song_title, artist, num_of_choices):
+def __score_video_name__(item_names, song_title, artist, num_of_choices):
     """
     give score to the videos by their title.
     artist in video name grants 0.5 points, and song_title grants 1 point.
@@ -124,8 +125,8 @@ def __score_video_name__(video_items, song_title, artist, num_of_choices):
     Forbidden words:
         1. cover
         2. live
-    :param video_items: the list of youtube videos from youtube api
-    :type video_items: list of videos from youtube api
+    :param item_names: the list of the titles of the first 3 songs
+    :type item_names: list
     :param song_title: the title of the song
     :type song_title: str
     :param artist: the artist of the song
@@ -137,7 +138,6 @@ def __score_video_name__(video_items, song_title, artist, num_of_choices):
     """
     forbidden_words = re.compile('.*\W(cover|live)\W.*', re.IGNORECASE)
     score = [0] * num_of_choices
-    item_names = [video["snippet"]["title"] for video in video_items]
     for i, name in enumerate(item_names):
         if song_title.lower() in name.lower():
             score[i] += 1
@@ -160,7 +160,7 @@ def __score_video_position__(num_of_choices):
     return [n for n in range(num_of_choices * 2, 0, -2)]
 
 
-def __score_video_length__(video_items, num_of_choices, wanted_length=None, accepted_seconds_error=10):
+def __score_video_length__(item_times, num_of_choices, wanted_length=None, accepted_seconds_error=10):
     """
     give score to the videos by their lengths.
     if wanted_length given, the videos which:
@@ -169,8 +169,8 @@ def __score_video_length__(video_items, num_of_choices, wanted_length=None, acce
     will get a score of 5.
     if wanted_length given, all other videos will get -9999 score.
     if wanted_length not given, score will be 0 for all videos.
-    :param video_items: the list of youtube videos from youtube api
-    :type video_items: list of videos from youtube api
+    :param item_times: the list of times taken from the first 3 songs, Minutes:Seconds
+    :type item_times: list
     :param wanted_length: The desired length of the song. example: "2:15"
     :type wanted_length: str
     :param num_of_choices: the number of videos to choose from
@@ -186,21 +186,20 @@ def __score_video_length__(video_items, num_of_choices, wanted_length=None, acce
         wanted_time = datetime.strptime(wanted_length, time_format)
         wanted_seconds = wanted_time.second + wanted_time.minute * 60 + wanted_time.hour * 3600
 
-        print("wanted seconds OK "+str(wanted_seconds))
+        for i in range(len(item_times)):
+            if item_times[i].split(":")[1] == "":
+                item_times[i] += "0"
+            elif item_times[i].split(":")[0] == "":
+                item_times[i] = "0" + item_times[i]
 
-        item_times = [length["contentDetails"]["duration"].strip("PTS").replace("M", ":") for length in video_items]
+        print(f"item_times= {item_times}")
         item_times = [int(length.split(":")[0]) * 60 + int(length.split(":")[1]) for length in item_times]
-
-        print("actual seconds OK "+str(item_times))
 
         for i, time in enumerate(item_times):
             if time is None:
                 delta[i] = 9999
                 continue
             delta[i] = max(wanted_seconds, time) - min(wanted_seconds, time)
-
-        print("delta OK")
-    else:print("no wanted length")
 
     score = [0] * num_of_choices
     for i in range(len(score)):
@@ -210,25 +209,23 @@ def __score_video_length__(video_items, num_of_choices, wanted_length=None, acce
             pass
         elif delta[i] == min(delta) or delta[i] < accepted_seconds_error:
             score[i] += 5
-    print("returned")
     return score
 
 
-def __score_video_views_count__(video_items, num_of_choices):
+def __score_video_views_count__(item_views, num_of_choices):
     """
     give score to the videos by their views count.
     the item with the max views count get 2 points.
     the other items get 0 points.
     item with no views field (indicating its a playlist) gets -9999 points.
-    :param video_items: the list of youtube videos from youtube api
-    :type video_items: list of videos from youtube api
+    :param item_views: the list of the views from the first 3 songs
+    :type video_items: list
     :param num_of_choices: the number of videos to choose from
     :type num_of_choices: int
     :return: list of scores of the videos. sorted as the videos are sorted in the youtube search result.
     :rtype: list of ints
     """
     score = [0] * num_of_choices
-    item_views = [video["statistics"]["viewCount"] for video in video_items]
 
     for i in range(len(score)):
         if item_views[i] == max(item_views):
@@ -239,27 +236,25 @@ def __score_video_views_count__(video_items, num_of_choices):
     return score
 
 
-def choose_video(video_items, song_title, artist, wanted_length=None, num_of_choices=3):
+def choose_video(video_items, song_title, artist, wanted_length=None):
     """
-    gets a soup of a youtube song search and song data, and returns the url of the most relevant video from the top
-    num_of_choices videos.
+    gets video items of a youtube songs that came from a search and song data, and returns the url of the most relevant
+    video.
     The decision is based on some parameters:
         1. The position of the video in the youtube search (they have relevance algorithms to)
         2. The name of the video
         3. The diff between the length of the video and the wanted_length of the song
         4. The number of views of the video
     :param video_items: the list of youtube videos from youtube api
-    :type video_items: list of videos from youtube api
+    :type video_items: list
     :param song_title: the title of the song
     :type song_title: str
     :param artist: the artist of the song
     :type artist: str
     :param wanted_length: The desired length of the song. example: "2:15"
     :type wanted_length: str
-    :param num_of_choices:
-    :param num_of_choices: the number of videos to choose from. not more than 5.
-    :type num_of_choices: int
     """
+    num_of_choices = len(video_items)
 
     if num_of_choices > 5:
         print("no more than 5 options")
@@ -270,17 +265,18 @@ def choose_video(video_items, song_title, artist, wanted_length=None, num_of_cho
     if not video_items:
         print("NO VIDEOS FOUND FOR SONG: {}".format(song_title))
         return
-    print("on scores")
     score = [0] * num_of_choices
-    print("what1?")
     score = [x + y for x, y in zip(score, __score_video_position__(num_of_choices))]
-    print("what2?")
-    score = [x + y for x, y in zip(score, __score_video_name__(video_items, song_title, artist, num_of_choices))]
-    print("what3?")
-    score = [x + y for x, y in zip(score, __score_video_length__(video_items, num_of_choices, wanted_length))]
-    print("what4?")
-    score = [x + y for x, y in zip(score, __score_video_views_count__(video_items, num_of_choices))]
-    print("what5?")
+    score = [x + y for x, y in zip(score, __score_video_name__([video["snippet"]["title"] for video in video_items],
+                                                               song_title, artist, num_of_choices))]
+
+    score = [x + y for x, y in zip(score, __score_video_length__(
+        [length["contentDetails"]["duration"].strip("PTS").replace("M", ":") for length in video_items], num_of_choices,
+        wanted_length))]
+
+    score = [x + y for x, y in zip(score, __score_video_views_count__(
+        [video["statistics"]["viewCount"] for video in video_items], num_of_choices))]
+
     items_hrefs = ['https://www.youtube.com/watch?v={}'.format(video["id"]) for video in video_items]
 
     print("item hrefs: {}".format(items_hrefs))
@@ -303,29 +299,16 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     :return:
     """
 
-    youtube = build(serviceName='youtube', version='v3', developerKey=api_key)
+    youtube = youtube_build(serviceName='youtube', version='v3', developerKey=api_key)
     request = youtube.search().list(part="snippet", maxResults=3,
-                                    q="{artist} {title} lyrics".format(artist=artist, title=song_title))
+                                    q="{artist} {title} lyrics".format(artist=artist, title=song_title), type="video")
     respond = request.execute()
     items = respond['items']
-    print([item["snippet"]["title"] for item in items])
-    ids = "".join(i["id"]["videoId"] + "," for i in items)[:-1]
-    print(ids)
-    print("lolololololol")
+    ids = ",".join([i["id"]["videoId"] for i in items])
     videos = youtube.videos().list(part="snippet,contentDetails,statistics", id=ids).execute()
     videoItems = videos["items"]
 
-    chosen = None
-    for i in range(3):
-        try:
-            chosen = choose_video(videoItems, song_title, artist, wanted_length)
-            break
-        except Exception as e:
-            print("filed finding/paresing {} . trying again...".format(song_title))
-
-    if chosen is None:
-        print("cant find or parse {} on youtube".format(song_title))
-        return
+    chosen = choose_video(videoItems, song_title, artist, wanted_length)
 
     output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
 
@@ -436,7 +419,8 @@ def main():
 
     for album_title, artist in albums:
         songs_dict = find_album_songs(album_title, artist)
-
+        if songs_dict is None:
+            continue
         print("songs dict: {}\n".format(songs_dict))
 
         for i, song_title in enumerate(songs_dict):
