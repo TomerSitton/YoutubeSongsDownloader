@@ -50,7 +50,7 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
     try:
         first_result_link = soup.find(name='div', attrs=GOOGLE_SEARCH_RESULTS_ATTRS).findChild(name='a').get(key='href')
     except AttributeError:
-        print("we didn't find anything that match what you wrote")
+        print(f"couldn't find album {album_title} by {artist} on wikipedia")
         return
     res = requests.get(first_result_link, headers=HEADERS_GET).text
     with open(r"C:\Users\User\Music\{album}.html".format(album=album_title), "w", encoding='UTF-8') as f:
@@ -269,9 +269,8 @@ def choose_video(video_items, song_title, artist, wanted_length=None):
     score = [x + y for x, y in zip(score, __score_video_position__(num_of_choices))]
     score = [x + y for x, y in zip(score, __score_video_name__([video["snippet"]["title"] for video in video_items],
                                                                song_title, artist, num_of_choices))]
-
     score = [x + y for x, y in zip(score, __score_video_length__(
-        [length["contentDetails"]["duration"].strip("PTS").replace("M", ":") for length in video_items], num_of_choices,
+        [video_item["contentDetails"]["duration"].strip("PTS").replace("M", ":") if "M" in video_item["contentDetails"]["duration"] else "0:" + video_item["contentDetails"]["duration"].strip('PTS') for video_item in video_items], num_of_choices,
         wanted_length))]
 
     score = [x + y for x, y in zip(score, __score_video_views_count__(
