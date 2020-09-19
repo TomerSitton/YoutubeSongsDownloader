@@ -1,4 +1,5 @@
 import re
+import socket
 from datetime import datetime
 from os.path import expanduser
 
@@ -270,7 +271,9 @@ def choose_video(video_items, song_title, artist, wanted_length=None):
     score = [x + y for x, y in zip(score, __score_video_name__([video["snippet"]["title"] for video in video_items],
                                                                song_title, artist, num_of_choices))]
     score = [x + y for x, y in zip(score, __score_video_length__(
-        [video_item["contentDetails"]["duration"].strip("PTS").replace("M", ":") if "M" in video_item["contentDetails"]["duration"] else "0:" + video_item["contentDetails"]["duration"].strip('PTS') for video_item in video_items], num_of_choices,
+        [video_item["contentDetails"]["duration"].strip("PTS").replace("M", ":") if "M" in video_item["contentDetails"][
+            "duration"] else "0:" + video_item["contentDetails"]["duration"].strip('PTS') for video_item in
+         video_items], num_of_choices,
         wanted_length))]
 
     score = [x + y for x, y in zip(score, __score_video_views_count__(
@@ -301,10 +304,32 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     youtube = youtube_build(serviceName='youtube', version='v3', developerKey=api_key)
     request = youtube.search().list(part="snippet", maxResults=3,
                                     q="{artist} {title} lyrics".format(artist=artist, title=song_title), type="video")
-    respond = request.execute()
+
+    for i in range(3):
+        z = 0
+        try:
+            respond = request.execute()
+            break
+        except socket.timeout:
+            z = 1
+            continue
+    if z == 1:
+        return
+
     items = respond['items']
     ids = ",".join([i["id"]["videoId"] for i in items])
-    videos = youtube.videos().list(part="snippet,contentDetails,statistics", id=ids).execute()
+
+    for i in range(3):
+        z = 0
+        try:
+            videos = youtube.videos().list(part="snippet,contentDetails,statistics", id=ids).execute()
+            break
+        except socket.timeout:
+            z = 1
+            continue
+    if z == 1:
+        return
+
     videoItems = videos["items"]
 
     chosen = choose_video(videoItems, song_title, artist, wanted_length)
@@ -427,7 +452,7 @@ def main():
             if song_path is None:
                 print("failed download {}. please try again later".format(song_title))
                 continue
-            add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+            # add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
 
 if __name__ == "__main__":
