@@ -27,7 +27,23 @@ YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
 GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
 GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
 
+WIN_BAD_CHAR_IN_FILE_NAME = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+
 api_key = api.api_key
+
+
+def remove_chars(word, bad_chars):
+    """
+
+    :param word: the word u want to remove the chars from
+    :type word: str
+    :param bad_chars: a list of chars u want to remove from the word
+    :type bad_chars: list
+    :return: the word without the chars
+    """
+    for i in bad_chars:
+        word = word.replace(i, "")
+    return word
 
 
 def find_album_songs_wiki(album_title, artist, google_songs=[]):
@@ -270,7 +286,9 @@ def choose_video(video_items, song_title, artist, wanted_length=None):
     score = [x + y for x, y in zip(score, __score_video_name__([video["snippet"]["title"] for video in video_items],
                                                                song_title, artist, num_of_choices))]
     score = [x + y for x, y in zip(score, __score_video_length__(
-        [video_item["contentDetails"]["duration"].strip("PTS").replace("M", ":") if "M" in video_item["contentDetails"]["duration"] else "0:" + video_item["contentDetails"]["duration"].strip('PTS') for video_item in video_items], num_of_choices,
+        [video_item["contentDetails"]["duration"].strip("PTS").replace("M", ":") if "M" in video_item["contentDetails"][
+            "duration"] else "0:" + video_item["contentDetails"]["duration"].strip('PTS') for video_item in
+         video_items], num_of_choices,
         wanted_length))]
 
     score = [x + y for x, y in zip(score, __score_video_views_count__(
@@ -309,7 +327,10 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
 
     chosen = choose_video(videoItems, song_title, artist, wanted_length)
 
-    output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
+    song_title_to_output = remove_chars(song_title, WIN_BAD_CHAR_IN_FILE_NAME).strip()
+
+    output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title_to_output,
+                                                           artist=artist)
 
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -320,17 +341,17 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
             'preferredquality': '192'
         }]
     }
-
     for i in range(3):
         try:
             with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([chosen])
-            output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title, artist=artist)
+            output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title_to_output,
+                                                                   artist=artist)
             break
         except Exception as e:
             print("e= " + str(e))
             if str(e) in "ERROR: ffprobe/avprobe and ffmpeg/avconv not found. Please install one.":
-                output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title,
+                output_file = r'{out_dir}\{artist}-{title}.mp3'.format(out_dir=output_dir, title=song_title_to_output,
                                                                        artist=artist)
                 break
             else:
@@ -338,6 +359,49 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
                 print("{} failed. trying again...".format(song_title))
 
     return output_file
+
+
+def detect_leading_silence(music_file, silence_threshold=-50.0, chunk_size=10):
+    """
+    detect in ms the silence part at start of music file- iterate over chunks until find the first one with sound
+    :param music_file: the file
+    :type music_file: pydub.AudioSegment
+    :param silence_threshold: the min dB that count as not silence
+    :type silence_threshold: float (dB)
+    :param chunk_size: the number of ms to check every time in the loop
+    :type chunk_size: int (ms)
+    """
+    trim_ms = 0  # ms
+
+    assert chunk_size > 0  # to avoid infinite loop
+    while music_file[trim_ms:trim_ms + chunk_size].dBFS < silence_threshold and trim_ms < len(music_file):
+        trim_ms += chunk_size
+
+    return trim_ms
+
+
+def delete_leading_silence(file_path):
+    """
+    trim the song from start and end to delete silence. keeps 500 ms silence at end of file.
+    :param file_path: the path of the song
+    :type file_path: str
+    :return: None
+    """
+    try:
+        music_file = AudioSegment.from_file(file_path)
+    except FileNotFoundError as e:
+        print("failed to convert {} to mp3 because file not found: {}".format(file_path, e))
+        return
+    except Exception as e:
+        print("unhandled exception in converting {} to mp3: {}".format(file_path, e))
+        return
+
+    start_trim = detect_leading_silence(music_file)
+    end_trim = detect_leading_silence(music_file.reverse())
+
+    duration = len(music_file)
+    trimmed_sound = music_file[start_trim:duration - end_trim + 500]
+    trimmed_sound.export(file_path, format="mp3")
 
 
 def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=0, year=""):
@@ -357,19 +421,6 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
     :type year: str
     :return: None
     """
-
-    try:
-        print("replacing the file...")
-        AudioSegment.from_file(file_path).export(file_path, format='mp3')
-        print("writing tags on file...")
-        print("{} {} {} {}".format(title, album, artist, index))
-    except FileNotFoundError as e:
-        print("failed to convert {} to mp3 because file not found: {}".format(title, e))
-        return
-    except Exception as e:
-        print("unhandled exception in converting {} to mp3: {}".format(title, e))
-        return
-
     if title is 'Unknown':
         title = file_path.split('\\')[-1].split('.')[0]
     try:
@@ -389,7 +440,7 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
     audio.save(file_path)
 
 
-def recieve_album_request():
+def receive_album_request():
     usage_msg = """
         Hi there!
         This program is designed to download full albums from youtube!
@@ -413,7 +464,7 @@ def recieve_album_request():
 
 
 def main():
-    albums = recieve_album_request()
+    albums = receive_album_request()
     output_dir = expanduser("~\\Music")
 
     for album_title, artist in albums:
@@ -427,6 +478,8 @@ def main():
             if song_path is None:
                 print("failed download {}. please try again later".format(song_title))
                 continue
+
+            delete_leading_silence(file_path=song_path)
             add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
 
