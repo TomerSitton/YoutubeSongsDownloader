@@ -25,7 +25,7 @@ GOOGLE_LENGTH_TAG_ATTRS = {"class": "Li8Y0e fRmlm"}  # google album search
 YOUTUBE_ITEM_ATTRS = {"class": "yt-lockup-title"}  # youtube song search
 YOUTUBE_VIEWS_ATTRS = {"class": "yt-lockup-meta-info"}  # youtube song search
 GOOGLE_DATE_ATTRS = {"class": "Z0LcW"}  # google album year search
-GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'r'}
+GOOGLE_SEARCH_RESULTS_ATTRS = {'class': 'yuRUbf'}
 
 api_key = api.api_key
 
