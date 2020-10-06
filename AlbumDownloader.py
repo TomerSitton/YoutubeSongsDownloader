@@ -1,7 +1,7 @@
 import re
-import socket
 from datetime import datetime
 from os.path import expanduser
+from socket import timeout
 
 import requests
 import youtube_dl
@@ -304,30 +304,28 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     youtube = youtube_build(serviceName='youtube', version='v3', developerKey=api_key)
     request = youtube.search().list(part="snippet", maxResults=3,
                                     q="{artist} {title} lyrics".format(artist=artist, title=song_title), type="video")
-
+    respond = None
     for i in range(3):
-        z = 0
         try:
             respond = request.execute()
             break
-        except socket.timeout:
-            z = 1
+        except timeout:
             continue
-    if z == 1:
+
+    if respond is None:
         return
 
     items = respond['items']
     ids = ",".join([i["id"]["videoId"] for i in items])
 
+    videos = None
     for i in range(3):
-        z = 0
         try:
             videos = youtube.videos().list(part="snippet,contentDetails,statistics", id=ids).execute()
             break
-        except socket.timeout:
-            z = 1
+        except timeout:
             continue
-    if z == 1:
+    if videos is None:
         return
 
     videoItems = videos["items"]
@@ -377,7 +375,7 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
     :param album: the album that the song is part of
     :type album: str
     :param index: the index of the song in the album
-    :type index: str
+    :type index: int
     :param year: the year of release of the song/ album
     :type year: str
     :return: None
@@ -452,7 +450,7 @@ def main():
             if song_path is None:
                 print("failed download {}. please try again later".format(song_title))
                 continue
-            # add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+            add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
 
 
 if __name__ == "__main__":
