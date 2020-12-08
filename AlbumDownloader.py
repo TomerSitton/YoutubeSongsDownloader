@@ -64,8 +64,8 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
     length_column_index = table_headers.index('Length')
 
     wiki_songs_dict = {}
-    for row in tracklist_table.find_all(name='tr'):
-        columns = row.find_all(name='td')
+    for row in tracklist_table.find_all(name='tr')[1::]:
+        columns = row.find_all(name='th') + row.find_all(name='td')
         if len(columns) == len(table_headers):
             title_regex = re.compile(r'\w.*')
             length_regex = re.compile(r'\d{1,2}:\d{1,2}')
@@ -83,7 +83,6 @@ def find_album_songs_wiki(album_title, artist, google_songs=[]):
                     0]
             length = length_match.string.strip('\n')
             wiki_songs_dict[title] = length
-            print('title={}, length={}'.format(title, length))
 
     return wiki_songs_dict
 
@@ -115,6 +114,39 @@ def find_album_songs(album_title, artist):
         songs_dict = find_album_songs_wiki(album_title, artist, google_songs=songs)
 
     return songs_dict
+
+
+def find_song_info(song_and_artists):
+    """
+   Search "<song_title>+<artist>+album" in google.
+   return list of tuples of the album names and lengths of the song
+   (if no length tag in the google search, lengths will be None
+   if no album tag in the google search, album will be the song's name).
+   :param song_and_artists: list of tuples with the songs name and artists
+   :type song_and_artists: list
+   :return: A list of tuples of the album names and lengths of the song
+   :rtype: lst of (string, string). for example: [("album_exm", "03:25")]
+   """
+    output = []
+    for song, artist in song_and_artists:
+        query = f"{song} {artist}".replace(" ", "+")
+        search = "https://www.google.com/search?q={query}+album&ie=utf-8&oe=utf-8'".format(query=query)
+        res = requests.get(search, headers=HEADERS_GET).text
+        soup = BeautifulSoup(res, 'html.parser')
+        album = soup.find_all(attrs={"class": "FLP8od"})
+        if not album:
+            album = song
+        else:
+            album = album[0].text.split("/")[0]
+        print(album)
+        length = None
+        album_info = find_album_songs(album, artist)
+        for name in album_info:
+            if song.lower() in name.lower():
+                length = album_info[name]
+                break
+        output.append((album, length))
+    return output
 
 
 def __score_video_name__(item_names, song_title, artist, num_of_choices):
@@ -270,7 +302,9 @@ def choose_video(video_items, song_title, artist, wanted_length=None):
     score = [x + y for x, y in zip(score, __score_video_name__([video["snippet"]["title"] for video in video_items],
                                                                song_title, artist, num_of_choices))]
     score = [x + y for x, y in zip(score, __score_video_length__(
-        [video_item["contentDetails"]["duration"].strip("PTS").replace("M", ":") if "M" in video_item["contentDetails"]["duration"] else "0:" + video_item["contentDetails"]["duration"].strip('PTS') for video_item in video_items], num_of_choices,
+        [video_item["contentDetails"]["duration"].strip("PTS").replace("M", ":") if "M" in video_item["contentDetails"][
+            "duration"] else "0:" + video_item["contentDetails"]["duration"].strip('PTS') for video_item in
+         video_items], num_of_choices,
         wanted_length))]
 
     score = [x + y for x, y in zip(score, __score_video_views_count__(
@@ -352,7 +386,7 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
     :param album: the album that the song is part of
     :type album: str
     :param index: the index of the song in the album
-    :type index: str
+    :type index: int
     :param year: the year of release of the song/ album
     :type year: str
     :return: None
@@ -389,15 +423,12 @@ def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknow
     audio.save(file_path)
 
 
-def recieve_album_request():
-    usage_msg = """
-        Hi there!
-        This program is designed to download full albums from youtube!
-        Enter the name of the artist and the album.
+def receive_album_request():
+    msg = """        
+        Enter the name of the album and the artist.
         When finished - press enter!
         """
-    print(usage_msg)
-
+    print(msg)
     albums = []
 
     album_title = input("Album Title:(Enter to exit)\n")
@@ -412,10 +443,49 @@ def recieve_album_request():
     return albums
 
 
-def main():
-    albums = recieve_album_request()
-    output_dir = expanduser("~\\Music")
+def receive_songs_request():
+    msg = """        
+        Enter the name of the song and the artist.
+        When finished - press enter!
+        """
+    print(msg)
+    songs = []
 
+    song_title = input("Song Title:(Enter to exit)\n")
+    artist = input("Artist:\n")
+
+    while song_title is not "" and artist is not "":
+        songs.append((song_title, artist))
+        song_title = input("Song Title:(Enter to exit)\n")
+        if song_title is not "":
+            artist = input("Album Artist:(Enter to exit)\n")
+
+    return songs
+
+
+def receive_requests():
+    """
+    make sure what the user wants, to download songs or to download full albums
+
+    :return: true and list of tuples with albums and artists if want to download albums
+            false and list of tuples with songs and artists if want to download songs
+    :rtype tuple
+    """
+    usage_msg = """
+        Hi there!
+        This program is designed to download full albums or single songs from youtube!
+        """
+    print(usage_msg)
+    albumsOrSongs = "a"
+    while not albumsOrSongs == '1' and not albumsOrSongs == '2':
+        albumsOrSongs = input("Do you want to download full albums or single songs?\n(1 or 2): ")
+    if albumsOrSongs == '1':
+        return True, receive_album_request()
+    else:
+        return False, receive_songs_request()
+
+
+def handle_albums(albums, output_dir):
     for album_title, artist in albums:
         songs_dict = find_album_songs(album_title, artist)
         if songs_dict is None:
@@ -428,6 +498,32 @@ def main():
                 print("failed download {}. please try again later".format(song_title))
                 continue
             add_mp3_metadata(file_path=song_path, title=song_title, album=album_title, artist=artist, index=i + 1)
+
+
+def handle_songs(songs, output_dir):
+    songs_info = find_song_info(songs)
+    if songs_info is None:
+        pass
+    print("songs dict: {}\n".format(songs_info))
+    i = 0
+    for album, length in songs_info:
+        song_title = songs[i][0]
+        song_artist = songs[i][1]
+        song_path = download_song(song_title, song_artist, output_dir=output_dir, wanted_length=length)
+        if song_path is None:
+            print("failed download {}. please try again later".format(song_title))
+            continue
+        add_mp3_metadata(file_path=song_path, title=song_title, album=album, artist=song_artist)
+        i += 1
+
+
+def main():
+    wantsAlbums, toDownload = receive_requests()
+    output_dir = expanduser("~\\Music")
+    if wantsAlbums:
+        handle_albums(toDownload, output_dir)
+    else:
+        handle_songs(toDownload, output_dir)
 
 
 if __name__ == "__main__":
