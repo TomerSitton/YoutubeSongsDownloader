@@ -374,7 +374,7 @@ def download_song(song_title, artist, output_dir, wanted_length=None):
     return output_file
 
 
-def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=0, year=""):
+def add_mp3_metadata(file_path, title='Unknown', artist='Unknown', album='Unknown', index=1, year=""):
     """
     adds tags for the mp3 file (artist, album etc.)
     :param file_path: the path of the mp3 file that was downloaded
